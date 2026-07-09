@@ -20,16 +20,16 @@
 
 ## 실행 방법
 
-0. Node.js 버전을 확인합니다.
-   - 기준: `.node-version` 또는 `.nvmrc`의 `22`
-1. 의존성을 설치합니다.
-   - 권장: `bun install`
-2. 환경변수 파일을 준비합니다.
+0. Docker 실행 환경을 준비합니다.
+   - 이 프로젝트의 개발, 실행, 빌드 확인은 Docker 기준으로 진행합니다.
+1. 환경변수 파일을 준비합니다.
    - `.env.example`을 참고해 `.env`를 만듭니다.
-3. 개발 서버를 실행합니다.
-   - `bun run dev`
-4. 배포 전 빌드를 확인합니다.
-   - `bun run build`
+2. 개발 서버를 실행합니다.
+   - `docker compose up`
+3. 배포 전 빌드를 확인합니다.
+   - `docker compose run --rm web npm run build`
+
+로컬에서 `npm install`, `bun install`, `pnpm install` 같은 의존성 설치는 기본 작업 방식이 아닙니다. 패키지 추가나 lockfile 변경이 필요하면 먼저 팀 기준을 확인합니다.
 
 ## 문서 검토 순서
 
@@ -109,10 +109,12 @@
 - Vite
 - Tailwind CSS
 - Firebase
-- Bun
+- Docker
+- Node.js 22
 
 ## 주의사항
 
 - `.env`는 Git에 올리지 않습니다.
 - Firebase 키는 `.env.example`에 값 없이 이름만 공유합니다.
 - 디자인 기준은 `docs/design-system.md` 기준을 따릅니다.
+- 의존성 설치와 실행 확인은 Docker 기준으로 진행합니다.
