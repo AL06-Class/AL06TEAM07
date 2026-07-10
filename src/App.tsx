@@ -1,62 +1,219 @@
-export default function App() {
-  const statusText = "\uc2e4\ud589 \uc644\ub8cc";
-  const titleText =
-    "Docker \uae30\ubc18 React \uac1c\ubc1c \ud658\uacbd\uc774 \uc815\uc0c1\uc801\uc73c\ub85c \uc900\ube44\ub418\uc5c8\uc2b5\ub2c8\ub2e4.";
-  const descriptionText =
-    "Node 22 \ucee8\ud14c\uc774\ub108\uc5d0\uc11c Vite \uac1c\ubc1c \uc11c\ubc84\uac00 \uc2e4\ud589\ub420 \uc218 \uc788\ub294 \uc0c1\ud0dc\uc785\ub2c8\ub2e4. \uc774\uc81c \uc774 \ud654\uba74\uc744 \uae30\uc900\uc73c\ub85c \ud504\ub860\ud2b8\uc5d4\ub4dc \uc791\uc5c5\uc744 \uc2dc\uc791\ud558\uba74 \ub429\ub2c8\ub2e4.";
+const jobs = [
+  {
+    title: "Frontend Developer",
+    company: "Wave Studio",
+    meta: "Seoul · React · 3-5 years",
+    salary: "5,500-7,000"
+  },
+  {
+    title: "Product Designer",
+    company: "North Labs",
+    meta: "Remote · UX/UI · 2+ years",
+    salary: "4,800-6,200"
+  },
+  {
+    title: "Backend Engineer",
+    company: "Core Bridge",
+    meta: "Pangyo · Node.js · 4+ years",
+    salary: "6,500-8,500"
+  }
+];
 
+const stats = [
+  ["1,240", "open roles"],
+  ["380", "hiring teams"],
+  ["72h", "avg. first reply"]
+];
+
+export default function App() {
   return (
     <main
       style={{
         minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        padding: "24px",
         background: "#f6f7f9",
         color: "#17202a",
         fontFamily:
           "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
       }}
     >
-      <section
+      <header
         style={{
-          width: "min(100%, 520px)",
-          padding: "32px",
-          border: "1px solid #d9dee7",
-          borderRadius: "8px",
-          background: "#ffffff",
-          boxShadow: "0 10px 30px rgba(23, 32, 42, 0.08)"
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "20px",
+          maxWidth: "1120px",
+          margin: "0 auto",
+          padding: "24px"
         }}
       >
-        <p
+        <strong style={{ fontSize: "20px" }}>HireBase</strong>
+        <nav
+          aria-label="main"
           style={{
-            margin: "0 0 12px",
-            color: "#18794e",
-            fontSize: "14px",
-            fontWeight: 700
-          }}
-        >
-          {statusText}
-        </p>
-        <h1
-          style={{
-            margin: "0 0 16px",
-            fontSize: "28px",
-            lineHeight: 1.25
-          }}
-        >
-          {titleText}
-        </h1>
-        <p
-          style={{
-            margin: 0,
+            display: "flex",
+            gap: "18px",
             color: "#52606d",
-            fontSize: "16px",
-            lineHeight: 1.6
+            fontSize: "14px"
           }}
         >
-          {descriptionText}
-        </p>
+          <span>Jobs</span>
+          <span>Companies</span>
+          <span>For employers</span>
+        </nav>
+      </header>
+
+      <section
+        style={{
+          maxWidth: "1120px",
+          margin: "0 auto",
+          padding: "48px 24px 32px",
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+          gap: "32px",
+          alignItems: "center"
+        }}
+      >
+        <div>
+          <p
+            style={{
+              margin: "0 0 14px",
+              color: "#18794e",
+              fontSize: "14px",
+              fontWeight: 700
+            }}
+          >
+            Verified tech hiring platform
+          </p>
+          <h1
+            style={{
+              margin: "0 0 18px",
+              fontSize: "clamp(36px, 6vw, 64px)",
+              lineHeight: 1.05,
+              letterSpacing: 0
+            }}
+          >
+            Find the right role without the hiring noise.
+          </h1>
+          <p
+            style={{
+              margin: "0 0 28px",
+              maxWidth: "560px",
+              color: "#52606d",
+              fontSize: "18px",
+              lineHeight: 1.65
+            }}
+          >
+            Browse curated openings, compare hiring teams, and apply only to
+            roles with clear salary ranges and fast response expectations.
+          </p>
+          <form
+            style={{
+              display: "flex",
+              gap: "10px",
+              flexWrap: "wrap",
+              marginBottom: "28px"
+            }}
+          >
+            <input
+              aria-label="Search jobs"
+              placeholder="Job title, skill, or company"
+              style={{
+                flex: "1 1 260px",
+                minHeight: "48px",
+                border: "1px solid #cfd6df",
+                borderRadius: "6px",
+                padding: "0 14px",
+                fontSize: "15px"
+              }}
+            />
+            <button
+              type="button"
+              style={{
+                minHeight: "48px",
+                border: "0",
+                borderRadius: "6px",
+                padding: "0 20px",
+                background: "#176b5c",
+                color: "#ffffff",
+                fontSize: "15px",
+                fontWeight: 700,
+                cursor: "pointer"
+              }}
+            >
+              Search jobs
+            </button>
+          </form>
+          <div style={{ display: "flex", gap: "24px", flexWrap: "wrap" }}>
+            {stats.map(([value, label]) => (
+              <div key={label}>
+                <strong style={{ display: "block", fontSize: "24px" }}>
+                  {value}
+                </strong>
+                <span style={{ color: "#52606d", fontSize: "14px" }}>
+                  {label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <aside
+          aria-label="Featured jobs"
+          style={{
+            background: "#ffffff",
+            border: "1px solid #d9dee7",
+            borderRadius: "8px",
+            boxShadow: "0 18px 45px rgba(23, 32, 42, 0.08)",
+            padding: "22px"
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "18px"
+            }}
+          >
+            <h2 style={{ margin: 0, fontSize: "20px" }}>Featured openings</h2>
+            <span style={{ color: "#52606d", fontSize: "13px" }}>Today</span>
+          </div>
+          <div style={{ display: "grid", gap: "12px" }}>
+            {jobs.map((job) => (
+              <article
+                key={job.title}
+                style={{
+                  border: "1px solid #e2e7ee",
+                  borderRadius: "8px",
+                  padding: "16px",
+                  background: "#fbfcfd"
+                }}
+              >
+                <h3 style={{ margin: "0 0 6px", fontSize: "17px" }}>
+                  {job.title}
+                </h3>
+                <p style={{ margin: "0 0 10px", color: "#52606d" }}>
+                  {job.company}
+                </p>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    color: "#52606d",
+                    fontSize: "13px"
+                  }}
+                >
+                  <span>{job.meta}</span>
+                  <strong style={{ color: "#17202a", whiteSpace: "nowrap" }}>
+                    {job.salary}
+                  </strong>
+                </div>
+              </article>
+            ))}
+          </div>
+        </aside>
       </section>
     </main>
   );
