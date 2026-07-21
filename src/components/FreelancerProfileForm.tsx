@@ -4,92 +4,37 @@ import { FormField } from "./FormField";
 
 const formSections = [
   {
-    title: "신원확인",
-    description: "기업 담당자가 기본 연락 정보를 확인할 수 있게 입력합니다.",
+    title: "신청확인",
     fields: [
-      { label: "이름", name: "name", type: "text", required: true },
-      { label: "이메일", name: "email", type: "email", required: true },
-      { label: "거주지역", name: "region", type: "text", required: true }
+      { label: "이름", name: "name", type: "text" },
+      { label: "이메일", name: "email", type: "email" },
+      { label: "거주지역", name: "region", type: "text" }
     ]
   },
   {
     title: "경력파악",
-    description: "검증 프로필에서 가장 먼저 비교되는 경력 정보를 정리합니다.",
     fields: [
-      {
-        label: "개발 총 경력 연수",
-        name: "experienceYears",
-        type: "number",
-        required: true
-      },
-      {
-        label: "주요 언어 / 프레임워크",
-        name: "mainStack",
-        type: "text",
-        required: true
-      },
-      {
-        label: "AI 개발 경험",
-        name: "aiExperience",
-        type: "textarea",
-        required: true
-      },
-      {
-        label: "보유 자격증",
-        name: "certifications",
-        type: "text",
-        required: false
-      },
-      {
-        label: "경력 설명",
-        name: "careerDescription",
-        type: "textarea",
-        required: true,
-        wide: true
-      }
+      { label: "개발총 경력연수", name: "experienceYears", type: "number" },
+      { label: "주요언어 프레임워크", name: "mainStack", type: "text" },
+      { label: "AI 개발경험", name: "aiExperience", type: "textarea" },
+      { label: "보유자격증", name: "certifications", type: "text" },
+      { label: "자격증직접입력", name: "certificationDetail", type: "text" }
     ]
   },
   {
     title: "과제 배정용",
-    description: "검증 과제와 포트폴리오 확인에 필요한 정보를 입력합니다.",
     fields: [
-      { label: "GitHub URL", name: "githubUrl", type: "url", required: true },
-      {
-        label: "희망 과제 유형",
-        name: "preferredTaskType",
-        type: "text",
-        required: true
-      }
+      { label: "GitHub URL", name: "githubUrl", type: "url" },
+      { label: "희망과제 유형", name: "preferredTaskType", type: "text" }
     ]
   },
   {
     title: "매칭조건",
-    description: "프로젝트 투입 가능 조건을 기업이 빠르게 비교할 수 있게 합니다.",
     fields: [
-      {
-        label: "가능한 시작 시기",
-        name: "availableStartDate",
-        type: "date",
-        required: true
-      },
-      {
-        label: "희망 기간",
-        name: "preferredDuration",
-        type: "text",
-        required: true
-      },
-      {
-        label: "희망 월 보수",
-        name: "desiredMonthlyPay",
-        type: "number",
-        required: true
-      },
-      {
-        label: "협상 가능 여부",
-        name: "isNegotiable",
-        type: "select",
-        required: true
-      }
+      { label: "가능한시작시기", name: "availableStartDate", type: "date" },
+      { label: "희망기간", name: "preferredDuration", type: "text" },
+      { label: "희망 월보수", name: "desiredMonthlyPay", type: "number" },
+      { label: "협상가능여부", name: "isNegotiable", type: "select" }
     ]
   }
 ];
@@ -102,7 +47,7 @@ export const freelancerProfileInitialData = {
   mainStack: "",
   aiExperience: "",
   certifications: "",
-  careerDescription: "",
+  certificationDetail: "",
   githubUrl: "",
   preferredTaskType: "",
   availableStartDate: "",
@@ -127,59 +72,59 @@ export function FreelancerProfileForm() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    console.log(formData);
   }
 
   return (
-    <form className="grid gap-5" onSubmit={handleSubmit}>
-      {formSections.map((section, sectionIndex) => (
-        <Card key={section.title} className="border-[#d7e4ef]">
-          <CardContent>
-            <div className="mb-5 flex items-start gap-4">
-              <span className="grid size-9 flex-none place-items-center rounded-full bg-[#0f6ea8] text-sm font-extrabold text-white">
-                {sectionIndex + 1}
-              </span>
-              <div>
-                <h3 className="text-xl font-extrabold">{section.title}</h3>
-                <p className="mt-1 text-sm leading-6 text-muted">
-                  {section.description}
-                </p>
+    <form className="grid gap-4" onSubmit={handleSubmit}>
+      <Card className="border-[#bde7e8] bg-[#eefefe]">
+        <CardContent>
+          <div className="mb-4">
+            <span className="inline-flex rounded-md bg-[#22c7c9] px-3 py-1 text-sm font-extrabold text-[#063f4a]">
+              Section 4
+            </span>
+          </div>
+
+          <div className="overflow-hidden rounded-md border border-[#d8e0e7] bg-white">
+            {formSections.map((section) => (
+              <div
+                key={section.title}
+                className="grid grid-cols-[120px_1fr] border-b border-[#e2e8ef] last:border-b-0 max-md:grid-cols-1"
+              >
+                <div className="border-r border-[#e2e8ef] bg-[#fbfdff] px-4 py-4 text-sm font-extrabold max-md:border-b max-md:border-r-0">
+                  {section.title}
+                </div>
+                <div className="grid grid-cols-3 max-lg:grid-cols-2 max-sm:grid-cols-1">
+                  {section.fields.map((field) => (
+                    <FormField
+                      key={field.name}
+                      {...field}
+                      value={
+                        formData[field.name as keyof FreelancerProfileFormData]
+                      }
+                      onChange={handleFieldChange}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
+            ))}
+          </div>
 
-            <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
-              {section.fields.map((field) => (
-                <FormField
-                  key={field.name}
-                  {...field}
-                  value={formData[field.name as keyof FreelancerProfileFormData]}
-                  onChange={handleFieldChange}
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-
-      <div className="sticky bottom-0 flex items-center justify-between gap-4 rounded-lg border border-border bg-white/95 p-4 shadow-[0_-8px_24px_rgba(15,95,153,0.08)] backdrop-blur max-md:flex-col max-md:items-stretch">
-        <p className="text-sm font-bold text-muted">
-          현재 단계에서는 입력값을 화면 상태로만 관리하며 API 연결은 하지 않습니다.
-        </p>
-        <div className="flex gap-3 max-md:grid max-md:grid-cols-2">
-          <button
-            type="button"
-            className="h-11 rounded-md border border-border bg-white px-5 text-sm font-bold hover:bg-slate-50"
-          >
-            임시 저장
-          </button>
-          <button
-            type="submit"
-            className="h-11 rounded-md bg-primary px-5 text-sm font-bold text-primary-foreground hover:bg-[#0d5f91]"
-          >
-            제출
-          </button>
-        </div>
-      </div>
+          <div className="mt-4 flex justify-end gap-3">
+            <button
+              type="button"
+              className="h-10 rounded-md border border-border bg-white px-4 text-sm font-bold hover:bg-slate-50"
+            >
+              임시 저장
+            </button>
+            <button
+              type="submit"
+              className="h-10 rounded-md bg-primary px-4 text-sm font-bold text-primary-foreground hover:bg-[#0d5f91]"
+            >
+              제출
+            </button>
+          </div>
+        </CardContent>
+      </Card>
     </form>
   );
 }

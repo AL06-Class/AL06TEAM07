@@ -2,8 +2,6 @@ type FormFieldProps = {
   label: string;
   name: string;
   type?: string;
-  required?: boolean;
-  wide?: boolean;
   value: string | boolean;
   onChange: (name: string, value: string | boolean) => void;
 };
@@ -12,28 +10,19 @@ export function FormField({
   label,
   name,
   type = "text",
-  required,
-  wide,
   value,
   onChange
 }: FormFieldProps) {
-  const wrapperClass = wide
-    ? "grid gap-2 text-sm font-bold md:col-span-2"
-    : "grid gap-2 text-sm font-bold";
-
   return (
-    <label className={wrapperClass}>
-      <span>
-        {label}
-        {required ? <span className="text-[#b54708]"> *</span> : null}
-      </span>
+    <label className="min-h-[86px] border-r border-t border-[#e7edf3] px-4 py-3 text-sm font-bold last:border-r-0">
+      <span className="mb-2 block text-[#1f2937]">{label}</span>
       {type === "textarea" ? (
         <textarea
           name={name}
           value={String(value)}
           onChange={(event) => onChange(name, event.target.value)}
-          rows={4}
-          className="min-h-28 resize-y rounded-md border border-border bg-white px-3 py-3 text-sm font-normal outline-none transition focus:border-[#0f6ea8] focus:ring-2 focus:ring-[#d8ecf8]"
+          rows={2}
+          className="min-h-16 w-full resize-y rounded-md border border-border bg-white px-3 py-2 text-sm font-normal outline-none transition focus:border-[#0f6ea8] focus:ring-2 focus:ring-[#d8ecf8]"
           placeholder={`${label} 입력`}
         />
       ) : type === "select" ? (
@@ -41,7 +30,7 @@ export function FormField({
           name={name}
           value={value ? "true" : "false"}
           onChange={(event) => onChange(name, event.target.value === "true")}
-          className="h-11 rounded-md border border-border bg-white px-3 text-sm font-normal outline-none transition focus:border-[#0f6ea8] focus:ring-2 focus:ring-[#d8ecf8]"
+          className="h-10 w-full rounded-md border border-border bg-white px-3 text-sm font-normal outline-none transition focus:border-[#0f6ea8] focus:ring-2 focus:ring-[#d8ecf8]"
         >
           <option value="false">불가</option>
           <option value="true">가능</option>
@@ -53,7 +42,7 @@ export function FormField({
           value={String(value)}
           onChange={(event) => onChange(name, event.target.value)}
           min={type === "number" ? "0" : undefined}
-          className="h-11 rounded-md border border-border bg-white px-3 text-sm font-normal outline-none transition focus:border-[#0f6ea8] focus:ring-2 focus:ring-[#d8ecf8]"
+          className="h-10 w-full rounded-md border border-border bg-white px-3 text-sm font-normal outline-none transition focus:border-[#0f6ea8] focus:ring-2 focus:ring-[#d8ecf8]"
           placeholder={`${label} 입력`}
         />
       )}

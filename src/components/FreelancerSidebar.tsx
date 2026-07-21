@@ -1,5 +1,5 @@
 const menuItems = [
-  "(현재) 검증 인력 프로필",
+  "(인재) 검증 인력 프로필",
   "인재 매칭",
   "(인재) 보증 현황 대시보드"
 ];
@@ -7,19 +7,18 @@ const menuItems = [
 export function FreelancerSidebar() {
   return (
     <aside className="h-fit rounded-lg border border-border bg-white p-4">
-      <div className="mb-4 flex items-center justify-between">
-        <strong className="text-sm">Section 3</strong>
-        <span className="text-xs font-bold text-muted">메뉴</span>
-      </div>
-      <nav className="grid gap-2">
+      <strong className="mb-3 inline-flex rounded-md bg-white px-2 py-1 text-sm shadow-sm">
+        Section 3
+      </strong>
+      <nav className="grid gap-3">
         {menuItems.map((item, index) => (
           <button
             key={item}
             type="button"
-            className={`min-h-12 rounded-md border px-3 text-left text-sm font-extrabold transition ${
+            className={`min-h-11 rounded-md border px-3 text-left text-sm font-extrabold transition ${
               index === 0
-                ? "border-[#7fcad4] bg-[#e8fbfb] text-[#0f5f99]"
-                : "border-border bg-white text-muted hover:bg-slate-50"
+                ? "border-[#22c7c9] bg-[#dff8f8] text-[#063f4a]"
+                : "border-border bg-white text-[#374151] hover:bg-slate-50"
             }`}
           >
             {item}
