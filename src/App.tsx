@@ -1,7 +1,9 @@
-import { type CSSProperties, useMemo, useState } from "react";
+import { Search } from "lucide-react";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
 
 type SignupRole = "company" | "engineer";
 type View = "select" | SignupRole;
+type CandidateStatus = "hired" | "pending";
 
 const roleOptions = [
   {
@@ -40,7 +42,58 @@ const benefits = [
   "검증·매칭 흐름과 자연스럽게 연결",
 ];
 
+const candidates = [
+  {
+    id: "app-001",
+    name: "김선성",
+    decision: "만족",
+    decidedAt: "2026-06-28",
+    status: "hired" as const,
+    role: "RAG 서비스 개발자",
+  },
+  {
+    id: "app-002",
+    name: "최혜덕",
+    decision: "불만족",
+    decidedAt: "2026-06-28",
+    status: "hired" as const,
+    role: "AI 문서 자동화 개발자",
+  },
+  {
+    id: "app-003",
+    name: "박윤채",
+    decision: "만족",
+    decidedAt: "2026-06-28",
+    status: "pending" as const,
+    role: "LLM 백엔드 개발자",
+  },
+  {
+    id: "app-004",
+    name: "이현수",
+    decision: "만족",
+    decidedAt: "2026-06-28",
+    status: "pending" as const,
+    role: "프롬프트 엔지니어",
+  },
+];
+
 export default function App() {
+  const [route, setRoute] = useState(() => window.location.hash);
+
+  useEffect(() => {
+    const syncRoute = () => setRoute(window.location.hash);
+    window.addEventListener("hashchange", syncRoute);
+    return () => window.removeEventListener("hashchange", syncRoute);
+  }, []);
+
+  if (route === "#applications") {
+    return <ApplicationStatusPage />;
+  }
+
+  return <SignupPage />;
+}
+
+function SignupPage() {
   const [view, setView] = useState<View>("select");
 
   const activeTitle = useMemo(() => {
@@ -195,6 +248,91 @@ function SignupForm({ role, onBack }: { role: SignupRole; onBack: () => void }) 
   );
 }
 
+function ApplicationStatusPage() {
+  const [query, setQuery] = useState("");
+  const filteredCandidates = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    if (!keyword) return candidates;
+    return candidates.filter((candidate) =>
+      [candidate.name, candidate.role, candidate.decision].some((value) =>
+        value.toLowerCase().includes(keyword)
+      )
+    );
+  }, [query]);
+
+  return (
+    <main className="applications-page" style={applicationStyles.page}>
+      <header style={applicationStyles.header}>
+        <a href="#signup" style={styles.logo} aria-label="결브릿지 홈">
+          <span style={styles.logoMark}>결</span>
+          <span style={styles.logoText}>결브릿지</span>
+        </a>
+        <span style={applicationStyles.headerText}>채용담당자 대시보드</span>
+      </header>
+
+      <section style={applicationStyles.content}>
+        <div className="applications-title-row" style={applicationStyles.titleRow}>
+          <div>
+            <p style={applicationStyles.eyebrow}>RECRUITER</p>
+            <h1 style={applicationStyles.heading}>인력지원현황</h1>
+            <p style={applicationStyles.lead}>매칭 인력의 결정 여부와 채용 여부만 확인합니다.</p>
+          </div>
+
+          <label className="applications-search" style={applicationStyles.searchBox}>
+            <Search size={16} />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="이름, 직무, 결정 검색"
+              style={applicationStyles.searchInput}
+            />
+          </label>
+        </div>
+
+        <section style={applicationStyles.tablePanel} aria-labelledby="applications-title">
+          <h2 id="applications-title" style={applicationStyles.sectionTitle}>지원자 목록</h2>
+          <div style={applicationStyles.tableWrap}>
+            <table style={applicationStyles.table}>
+              <thead>
+                <tr>
+                  <th style={applicationStyles.th}>매칭인력</th>
+                  <th style={applicationStyles.th}>결정여부</th>
+                  <th style={applicationStyles.th}>결정일</th>
+                  <th style={applicationStyles.th}>채용여부</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCandidates.map((candidate) => (
+                  <tr key={candidate.id}>
+                    <td style={applicationStyles.td}>
+                      <strong style={applicationStyles.name}>{candidate.name}</strong>
+                      <span style={applicationStyles.roleText}>{candidate.role}</span>
+                    </td>
+                    <td style={applicationStyles.td}>{candidate.decision}</td>
+                    <td style={applicationStyles.td}>{candidate.decidedAt}</td>
+                    <td style={applicationStyles.td}>
+                      <StatusBadge status={candidate.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+  );
+}
+
+function StatusBadge({ status }: { status: CandidateStatus }) {
+  const isHired = status === "hired";
+  return (
+    <span style={isHired ? applicationStyles.hiredBadge : applicationStyles.pendingBadge}>
+      {isHired ? "채용" : "미채용"}
+    </span>
+  );
+}
+
 const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
@@ -252,4 +390,40 @@ const styles: Record<string, CSSProperties> = {
   notice: { margin: "22px 0 0", paddingTop: "20px", borderTop: "1px solid #e8ece9", color: "#7a8580", fontSize: "12px", lineHeight: 1.6 },
   link: { color: "#53615c", textUnderlineOffset: "2px" },
   footer: { width: "min(1200px, calc(100% - 48px))", margin: "0 auto", padding: "22px 0 28px", color: "#8b9691", fontSize: "12px", borderTop: "1px solid #e3e8e4" },
+};
+
+const applicationStyles: Record<string, CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    background: "#f7f8f6",
+    color: "#202020",
+    fontFamily: "Pretendard, Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  },
+  header: {
+    height: "72px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "min(1120px, calc(100% - 48px))",
+    margin: "0 auto",
+    borderBottom: "1px solid #e3e8e4",
+  },
+  headerText: { color: "#64706c", fontSize: "13px", fontWeight: 700 },
+  content: { width: "min(1120px, calc(100% - 48px))", margin: "0 auto", padding: "42px 0 56px" },
+  titleRow: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "24px", marginBottom: "22px" },
+  eyebrow: { margin: "0 0 8px", color: "#991b1b", fontSize: "12px", letterSpacing: "0.08em", fontWeight: 800 },
+  heading: { margin: 0, fontSize: "32px", lineHeight: 1.25, letterSpacing: 0 },
+  lead: { margin: "10px 0 0", color: "#64706c", fontSize: "15px", lineHeight: 1.6 },
+  searchBox: { height: "42px", minWidth: "260px", display: "flex", alignItems: "center", gap: "8px", border: "1px solid #dce4df", borderRadius: "7px", padding: "0 12px", color: "#64706c", background: "#fff" },
+  searchInput: { width: "100%", border: 0, outline: 0, background: "transparent", color: "#202020", fontFamily: "inherit", fontSize: "13px" },
+  tablePanel: { border: "1px solid #dde5e0", borderRadius: "8px", background: "#fff", padding: "24px", boxShadow: "0 12px 34px rgba(22, 34, 31, 0.06)" },
+  sectionTitle: { margin: "0 0 16px", color: "#202020", fontSize: "18px", lineHeight: 1.3 },
+  tableWrap: { width: "100%", overflowX: "auto" },
+  table: { width: "100%", borderCollapse: "collapse", minWidth: "620px" },
+  th: { padding: "12px 10px", borderBottom: "1px solid #e5e5e2", background: "#fafafa", color: "#555", textAlign: "left", fontSize: "12px", fontWeight: 800 },
+  td: { padding: "14px 10px", borderBottom: "1px solid #eeeeec", color: "#343434", fontSize: "13px", verticalAlign: "middle" },
+  name: { display: "block", color: "#202020", fontSize: "14px" },
+  roleText: { display: "block", marginTop: "5px", color: "#777", fontSize: "12px" },
+  hiredBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "58px", height: "28px", borderRadius: "999px", background: "#dcfce7", color: "#166534", fontSize: "12px", fontWeight: 800 },
+  pendingBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "58px", height: "28px", borderRadius: "999px", background: "#f3f4f6", color: "#4b5563", fontSize: "12px", fontWeight: 800 },
 };
