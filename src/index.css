@@ -14,13 +14,107 @@
 }
 
 @media (max-width: 640px) {
-  .applications-page .applications-title-row {
-    align-items: flex-start !important;
-    flex-direction: column !important;
+  .dashboard-shell .applications-search {
+    width: 100% !important;
   }
 
-  .applications-page .applications-search {
-    width: calc(100% - 28px) !important;
-    min-width: 100% !important;
+  .dashboard-shell .overview-hero {
+    width: 100%;
+    padding-right: 0 !important;
+    padding-bottom: 16px;
+    border-right: none !important;
+    border-bottom: 1px solid #eef2f7;
+  }
+}
+
+@media (max-width: 720px) {
+  .dashboard-shell .secondary-row {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.dashboard-shell .home-link {
+  transition: background-color 150ms ease;
+}
+
+.dashboard-shell .home-link:hover {
+  background-color: rgba(255, 255, 255, 0.22);
+}
+
+.dashboard-shell .dashboard-nav-link {
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.dashboard-shell .dashboard-nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.dashboard-shell tbody tr {
+  transition: background-color 150ms ease;
+}
+
+.applications-page thead th:first-child {
+  border-top-left-radius: 14px;
+}
+
+.applications-page thead th:last-child {
+  border-top-right-radius: 14px;
+}
+
+.applications-page tbody tr:hover td {
+  background-color: #f4f8fd;
+}
+
+.applications-page .name-link {
+  border-radius: 6px;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.applications-page .name-link:hover {
+  background-color: #e8f1fc;
+  color: #0f3d73;
+}
+
+.applications-page .status-tab {
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.applications-page .status-tab:hover:not([aria-selected="true"]) {
+  color: #0b1220;
+}
+
+.applications-page .modal-close {
+  transition: background-color 150ms ease;
+}
+
+.applications-page .modal-close:hover {
+  background-color: #eef1f5;
+}
+
+.applications-page .modal-box {
+  animation: modal-pop 160ms ease;
+}
+
+.company-page thead th:first-child {
+  border-top-left-radius: 14px;
+}
+
+.company-page thead th:last-child {
+  border-top-right-radius: 14px;
+}
+
+.company-page tbody tr:hover td {
+  background-color: #fdf4f4;
+}
+
+@keyframes modal-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
