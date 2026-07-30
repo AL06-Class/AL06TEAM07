@@ -1,5 +1,6 @@
 import { Search } from "lucide-react";
 import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import { FreelancerRegisterPage } from "./pages/FreelancerRegisterPage";
 
 type SignupRole = "company" | "engineer";
 type View = "select" | SignupRole;
@@ -88,6 +89,10 @@ export default function App() {
 
   if (route === "#applications") {
     return <ApplicationStatusPage />;
+  }
+
+  if (route === "#freelancer-register") {
+    return <FreelancerRegisterPage />;
   }
 
   return <SignupPage />;
