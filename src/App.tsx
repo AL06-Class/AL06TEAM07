@@ -208,6 +208,8 @@ export default function App() {
 
   if (route === "#company-support") {
     return <CompanySupportStatusPage />;
+  }
+
   if (route === "#freelancer-register") {
     return <FreelancerRegisterPage />;
   }
