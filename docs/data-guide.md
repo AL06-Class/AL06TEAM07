@@ -143,6 +143,18 @@
 - UX/UI 개선 작업은 기본적으로 새 DB 이름을 만들지 않습니다.
 - 화면 상태 저장이나 사용자 피드백 데이터가 필요할 때만 공통 이름 사전에 추가합니다.
 
+#### 프로젝트 조건 입력
+
+- `projectType`: 프로젝트 유형
+- `budgetRange`: 예산 범위
+- `duration`: 예상 기간
+- `implementationScope`: 구현 하고자 하는 기능
+- `requiredSkills`: 필요 기술
+- `requiredHeadcount`: 필요 인력 수
+- `startDate`: 프로젝트 시작 시기
+- `workMode`: 근무 또는 협업 방식
+- `matchingRequest`: 매칭 요청 내용
+
 ### 역할 값
 
 - `candidate`: 지원자
@@ -274,6 +286,26 @@
 - `jobPostingId`
 - `evaluationItem`
 - `description`
+- `createdAt`
+- `updatedAt`
+
+### jobPostings
+
+- `id`
+- `companyId`
+- `recruiterId`
+- `title`
+- `description`
+- `projectType`
+- `budgetRange`
+- `duration`
+- `implementationScope`
+- `requiredSkills`
+- `requiredHeadcount`
+- `startDate`
+- `workMode`
+- `matchingRequest`
+- `status`
 - `createdAt`
 - `updatedAt`
 
