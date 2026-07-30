@@ -1,255 +1,424 @@
-import { type CSSProperties, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
+import {
+  ArrowRight,
+  BriefcaseBusiness,
+  CalendarDays,
+  CheckCircle2,
+  CircleDollarSign,
+  FileText,
+  LogOut,
+  UserPlus,
+  UserRound,
+  UsersRound,
+} from "lucide-react";
+import { Badge } from "./components/ui/badge";
+import { Card, CardContent } from "./components/ui/card";
+import { isFirebaseConfigured } from "./lib/firebase";
+import { FreelancerRegisterPage } from "./pages/FreelancerRegisterPage";
 
-type SignupRole = "company" | "engineer";
-type View = "select" | SignupRole;
+type View = "auth" | "recruiterProjectInput" | "freelancerRegister";
 
-const roleOptions = [
+type ProjectForm = {
+  title: string;
+  projectType: string;
+  budgetRange: string;
+  duration: string;
+  implementationScope: string;
+  requiredSkills: string;
+  requiredHeadcount: string;
+  startDate: string;
+  workMode: string;
+  matchingRequest: string;
+};
+
+const projectTypeOptions = ["AI 챗봇", "문서 자동화", "추천 시스템", "RAG 검색", "업무 자동화"];
+const budgetOptions = ["500만원 미만", "500만-1,000만원", "1,000만-3,000만원", "3,000만원 이상"];
+const durationOptions = ["2주 이내", "1개월", "2-3개월", "3개월 이상"];
+const headcountOptions = ["1명", "2명", "3명", "4명 이상"];
+const startDateOptions = ["즉시", "2주 이내", "1개월 이내", "협의 가능"];
+const workModeOptions = ["원격", "하이브리드", "상주 협업", "협의 가능"];
+
+const initialProjectForm: ProjectForm = {
+  title: "",
+  projectType: "AI 챗봇",
+  budgetRange: "1,000만-3,000만원",
+  duration: "2-3개월",
+  implementationScope: "",
+  requiredSkills: "",
+  requiredHeadcount: "1명",
+  startDate: "즉시",
+  workMode: "원격",
+  matchingRequest: "",
+};
+
+const sidebarItems = [
+  { label: "검증 인재", active: false },
+  { label: "인재 매칭", active: true },
+  { label: "보증 현황", active: false },
+];
+
+const recommendedDevelopers = [
   {
-    role: "company" as const,
-    label: "기업 회원가입",
-    description: "프로젝트 조건과 채용 정보를 등록하고 검증된 AI 엔지니어를 추천받습니다.",
-    detail: "기업 · 채용 담당자",
-    mark: "기",
+    name: "김하린",
+    title: "RAG · 문서 자동화",
+    score: 94,
+    meta: "React, Firebase, OpenAI API",
   },
   {
-    role: "engineer" as const,
-    label: "AI 엔지니어 회원가입",
-    description: "기술 스택과 프로젝트 경험을 등록하고 기업 매칭 기회를 확인합니다.",
-    detail: "AI 개발자",
-    mark: "A",
+    name: "박도윤",
+    title: "AI 챗봇 · 업무 자동화",
+    score: 91,
+    meta: "LangChain, Node.js, Slack Bot",
   },
-];
-
-const companyFields = [
-  { label: "기업명", placeholder: "예: Blogle2" },
-  { label: "담당자명", placeholder: "예: 김담당" },
-  { label: "업무 이메일", placeholder: "name@company.com" },
-  { label: "희망 프로젝트 유형", placeholder: "예: AI 챗봇, 문서 자동화" },
-];
-
-const engineerFields = [
-  { label: "이름", placeholder: "예: 김개발" },
-  { label: "이메일", placeholder: "name@email.com" },
-  { label: "주요 기술 스택", placeholder: "예: Python, React, LangChain" },
-  { label: "대표 프로젝트", placeholder: "예: RAG 기반 사내 검색 서비스" },
-];
-
-const benefits = [
-  "역할에 맞는 필수 정보만 입력",
-  "가입 후 전용 대시보드로 이동",
-  "검증·매칭 흐름과 자연스럽게 연결",
+  {
+    name: "정서연",
+    title: "추천 시스템 · 데이터 설계",
+    score: 88,
+    meta: "Python, 데이터 파이프라인, MVP",
+  },
 ];
 
 export default function App() {
-  const [view, setView] = useState<View>("select");
-
-  const activeTitle = useMemo(() => {
-    if (view === "company") return "기업 회원가입";
-    if (view === "engineer") return "AI 엔지니어 회원가입";
-    return "회원가입";
-  }, [view]);
-
-  const openSignup = (role: SignupRole) => {
-    setView(role);
-    window.history.replaceState(null, "", `#${role}-signup`);
+  const getInitialView = (): View => {
+    if (window.location.hash === "#freelancer-register") return "freelancerRegister";
+    if (window.location.hash === "#recruiter-project-input") return "recruiterProjectInput";
+    return "auth";
   };
 
-  const goSelect = () => {
-    setView("select");
-    window.history.replaceState(null, "", "#signup");
+  const [view, setView] = useState<View>(getInitialView);
+  const [userEmail, setUserEmail] = useState("");
+  const [projectForm, setProjectForm] = useState<ProjectForm>(initialProjectForm);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
+  const isProjectReady = useMemo(
+    () =>
+      Boolean(
+        projectForm.title.trim() &&
+          projectForm.implementationScope.trim() &&
+          projectForm.requiredSkills.trim() &&
+          projectForm.matchingRequest.trim(),
+      ),
+    [projectForm],
+  );
+
+  const handleGoogleSignIn = () => {
+    setUserEmail("recruiter@gmail.com");
+    setView("recruiterProjectInput");
+    window.history.replaceState(null, "", "#recruiter-project-input");
   };
+
+  const handleFreelancerRegister = () => {
+    setUserEmail("");
+    setView("freelancerRegister");
+    setIsSubmitted(false);
+    window.history.replaceState(null, "", "#freelancer-register");
+  };
+
+  const handleSignOut = () => {
+    setUserEmail("");
+    setView("auth");
+    setIsSubmitted(false);
+    window.history.replaceState(null, "", "#login");
+  };
+
+  const updateProjectForm = (field: keyof ProjectForm, value: string) => {
+    setProjectForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const submitProject = () => {
+    setIsSubmitted(true);
+  };
+
+  if (view === "freelancerRegister") {
+    return <FreelancerRegisterPage onBack={handleSignOut} />;
+  }
 
   return (
-    <main style={styles.page}>
-      <header style={styles.header}>
-        <a href="/" style={styles.logo} aria-label="결브릿지 홈">
-          <span style={styles.logoMark}>결</span>
-          <span style={styles.logoText}>결브릿지</span>
+    <main className="flex min-h-screen flex-col bg-[#f7f8f6] text-[#17221f]">
+      <header className="flex h-20 w-full items-center justify-between border-b border-[#e3e8e4] px-5 md:px-8">
+        <a href="/" className="inline-flex items-center gap-3 text-[#17221f] no-underline" aria-label="결브릿지 홈">
+          <span className="grid h-9 w-9 place-items-center rounded-md bg-[#b91c1c] text-base font-black text-white shadow-sm">결</span>
+          <span className="text-[22px] font-black tracking-normal">결브릿지</span>
         </a>
-        <span style={styles.headerText}>Verified AI Talent Network</span>
+        {userEmail ? (
+          <button type="button" onClick={handleSignOut} className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-[#dce4df] bg-white px-4 text-sm font-bold text-[#42534c]">
+            <LogOut className="h-4 w-4" />
+            로그아웃
+          </button>
+        ) : (
+          <span className="text-sm text-[#64706c]">Verified AI Talent Network</span>
+        )}
       </header>
 
-      <section style={styles.content}>
-        <div style={styles.intro}>
-          <span style={styles.eyebrow}>CREATE YOUR ACCOUNT</span>
-          <h1 style={styles.heading}>
-            {view === "select" ? (
-              <>
-                역할에 맞게 가입하고,
-                <br />
-                AI 프로젝트를 시작하세요.
-              </>
-            ) : (
-              <>
-                {activeTitle}으로,
-                <br />
-                필요한 정보만 빠르게 등록하세요.
-              </>
-            )}
-          </h1>
-          <p style={styles.lead}>
-            Blogle2는 기업과 AI 엔지니어의 가입 흐름을 분리해, 가입 직후 필요한 기능으로 바로 이어지게 구성합니다.
-          </p>
+      {view === "auth" ? <GoogleAuth onSignIn={handleGoogleSignIn} /> : null}
+      {view === "auth" ? <AuthShortcut onFreelancerRegister={handleFreelancerRegister} /> : null}
+      {view === "recruiterProjectInput" ? (
+        <RecruiterProjectInput
+          form={projectForm}
+          isReady={isProjectReady}
+          isSubmitted={isSubmitted}
+          userEmail={userEmail}
+          onChange={updateProjectForm}
+          onSubmit={submitProject}
+        />
+      ) : null}
 
-          <div style={styles.benefits}>
-            {benefits.map((benefit, index) => (
-              <div key={benefit} style={styles.benefit}>
-                <span style={styles.checkMark}>{index + 1}</span>
-                <span style={styles.benefitText}>{benefit}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <section style={styles.panel} aria-labelledby="signup-title">
-          {view === "select" ? (
-            <SignupSelect onSelect={openSignup} />
-          ) : (
-            <SignupForm role={view} onBack={goSelect} />
-          )}
-        </section>
-      </section>
-
-      <footer style={styles.footer}>© 2026 결브릿지. All rights reserved.</footer>
+      <footer className="w-full border-t border-[#e3e8e4] px-5 py-5 text-left text-xs leading-5 text-[#8b9691] md:px-8">
+        <p className="mb-3 mt-0">계속 진행하면 결브릿지의 이용약관 및 개인정보 처리방침에 동의한 것으로 봅니다.</p>
+        <p className="m-0">© 2026 결브릿지. All rights reserved.</p>
+      </footer>
     </main>
   );
 }
 
-function SignupSelect({ onSelect }: { onSelect: (role: SignupRole) => void }) {
+function AuthShortcut({ onFreelancerRegister }: { onFreelancerRegister: () => void }) {
   return (
-    <>
-      <div style={styles.panelHeader}>
-        <p style={styles.panelEyebrow}>WELCOME TO BLOGLE2</p>
-        <h2 id="signup-title" style={styles.panelTitle}>회원가입</h2>
-        <p style={styles.panelDescription}>가입할 유형을 선택하면 해당 가입 페이지로 바로 이동합니다.</p>
-      </div>
-
-      <div style={styles.roleList}>
-        {roleOptions.map(({ role, label, description, detail, mark }) => (
-          <button key={role} type="button" onClick={() => onSelect(role)} style={styles.roleButton}>
-            <span style={styles.iconBox}>{mark}</span>
-            <span style={styles.roleCopy}>
-              <span style={styles.roleLabel}>{label}</span>
-              <span style={styles.roleDescription}>{description}</span>
-              <span style={styles.roleDetail}>{detail}</span>
-            </span>
-            <span style={styles.arrow} aria-hidden="true">→</span>
-          </button>
-        ))}
-      </div>
-
-      <p style={styles.loginPrompt}>
-        이미 계정이 있나요? <a href="#login" style={styles.loginLink}>로그인</a>
-      </p>
-    </>
-  );
-}
-
-function SignupForm({ role, onBack }: { role: SignupRole; onBack: () => void }) {
-  const isCompany = role === "company";
-  const fields = isCompany ? companyFields : engineerFields;
-
-  return (
-    <>
-      <button type="button" onClick={onBack} style={styles.backButton}>
-        ← 가입 유형 다시 선택
+    <section className="mx-auto -mt-8 mb-10 w-[min(1100px,calc(100%-40px))]">
+      <button type="button" onClick={onFreelancerRegister} className="inline-flex h-11 cursor-pointer items-center justify-center rounded-md border border-[#dce4df] bg-white px-4 text-sm font-extrabold text-[#42534c] hover:bg-[#f8faf9]">
+        프리랜서 프로필 등록
       </button>
-
-      <div style={styles.panelHeader}>
-        <p style={styles.panelEyebrow}>{isCompany ? "COMPANY SIGNUP" : "AI ENGINEER SIGNUP"}</p>
-        <h2 id="signup-title" style={styles.panelTitle}>
-          {isCompany ? "기업 회원가입" : "AI 엔지니어 회원가입"}
-        </h2>
-        <p style={styles.panelDescription}>
-          {isCompany
-            ? "프로젝트 매칭을 위해 기업과 담당자 정보를 입력해 주세요."
-            : "검증과 매칭을 위해 기술 역량과 프로젝트 경험을 입력해 주세요."}
-        </p>
-      </div>
-
-      <form style={styles.form}>
-        {fields.map((field) => (
-          <label key={field.label} style={styles.field}>
-            <span style={styles.fieldLabel}>{field.label}</span>
-            <input style={styles.input} placeholder={field.placeholder} />
-          </label>
-        ))}
-
-        <label style={styles.field}>
-          <span style={styles.fieldLabel}>{isCompany ? "요청사항" : "자기소개"}</span>
-          <textarea
-            style={styles.textarea}
-            placeholder={isCompany ? "필요한 역할, 기간, 예산 등을 적어주세요." : "강점, 선호 업무, 가능한 투입 시점을 적어주세요."}
-          />
-        </label>
-
-        <button type="button" style={styles.primaryButton}>
-          {isCompany ? "기업 회원가입 완료" : "AI 엔지니어 회원가입 완료"}
-        </button>
-      </form>
-
-      <p style={styles.notice}>
-        계속 진행하면 Blogle2의 <a href="#terms" style={styles.link}>이용약관</a> 및 <a href="#privacy" style={styles.link}>개인정보 처리방침</a>에 동의하게 됩니다.
-      </p>
-    </>
+    </section>
   );
 }
 
-const styles: Record<string, CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: "#f7f8f6",
-    color: "#17221f",
-    fontFamily: "Pretendard, Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    display: "flex",
-    flexDirection: "column",
-  },
-  header: {
-    height: "80px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    maxWidth: "1200px",
-    width: "calc(100% - 48px)",
-    margin: "0 auto",
-    borderBottom: "1px solid #e3e8e4",
-  },
-  logo: { display: "inline-flex", alignItems: "center", gap: "10px", color: "#17221f", textDecoration: "none" },
-  logoMark: { display: "grid", placeItems: "center", width: "34px", height: "34px", borderRadius: "9px", background: "linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)", color: "#fff", fontSize: "16px", fontWeight: 850, boxShadow: "0 8px 18px rgba(15, 118, 110, 0.22)" },
-  logoText: { fontSize: "22px", fontWeight: 850, letterSpacing: 0, color: "#17221f" },
-  headerText: { color: "#64706c", fontSize: "13px" },
-  content: { flex: 1, width: "min(1120px, calc(100% - 48px))", margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 390px), 1fr))", gap: "64px", alignItems: "center", padding: "64px 0" },
-  intro: { maxWidth: "590px" },
-  eyebrow: { color: "#0f766e", fontWeight: 750, letterSpacing: "0.08em", fontSize: "12px" },
-  heading: { margin: "18px 0 20px", fontSize: "48px", lineHeight: 1.2, letterSpacing: 0, fontWeight: 760 },
-  lead: { margin: 0, color: "#53615c", fontSize: "18px", lineHeight: 1.7, maxWidth: "550px" },
-  benefits: { display: "grid", gap: "16px", marginTop: "42px" },
-  benefit: { display: "flex", alignItems: "center", gap: "13px" },
-  checkMark: { display: "grid", placeItems: "center", flex: "0 0 auto", width: "22px", height: "22px", borderRadius: "50%", background: "#d1fae5", color: "#0f766e", fontSize: "11px", fontWeight: 750 },
-  benefitText: { color: "#53615c", fontSize: "15px", fontWeight: 650 },
-  panel: { background: "#fff", border: "1px solid #dde5e0", borderRadius: "8px", padding: "38px", boxShadow: "0 16px 42px rgba(22, 34, 31, 0.07)" },
-  panelHeader: { marginBottom: "28px" },
-  panelEyebrow: { margin: "0 0 9px", color: "#0f766e", fontSize: "11px", letterSpacing: "0.08em", fontWeight: 750 },
-  panelTitle: { margin: "0 0 9px", fontSize: "26px", lineHeight: 1.3, letterSpacing: 0 },
-  panelDescription: { margin: 0, color: "#64706c", fontSize: "14px", lineHeight: 1.6 },
-  roleList: { display: "grid", gap: "12px" },
-  roleButton: { width: "100%", minHeight: "128px", padding: "18px", border: "1px solid #dce4df", borderRadius: "7px", background: "#fff", display: "flex", alignItems: "center", textAlign: "left", gap: "15px", cursor: "pointer", fontFamily: "inherit", transition: "border-color 160ms ease, background 160ms ease, box-shadow 160ms ease" },
-  iconBox: { flex: "0 0 auto", display: "grid", placeItems: "center", width: "44px", height: "44px", borderRadius: "6px", background: "#ccfbf1", color: "#0f766e", fontWeight: 800 },
-  roleCopy: { flex: 1, minWidth: 0 },
-  roleLabel: { display: "block", color: "#17221f", fontSize: "16px", fontWeight: 700, marginBottom: "5px" },
-  roleDescription: { display: "block", color: "#64706c", fontSize: "13px", lineHeight: 1.45 },
-  roleDetail: { display: "block", color: "#0f766e", fontSize: "12px", marginTop: "7px", fontWeight: 650 },
-  arrow: { flex: "0 0 auto", color: "#0f766e", fontSize: "20px", lineHeight: 1 },
-  backButton: { margin: "0 0 22px", padding: 0, border: 0, background: "transparent", color: "#0f766e", fontFamily: "inherit", fontSize: "13px", fontWeight: 750, cursor: "pointer" },
-  form: { display: "grid", gap: "14px" },
-  field: { display: "grid", gap: "7px" },
-  fieldLabel: { color: "#42534c", fontSize: "13px", fontWeight: 750 },
-  input: { height: "46px", border: "1px solid #dce4df", borderRadius: "7px", padding: "0 14px", color: "#17221f", fontFamily: "inherit", fontSize: "14px", outlineColor: "#0f766e", background: "#fbfcfb" },
-  textarea: { minHeight: "92px", border: "1px solid #dce4df", borderRadius: "7px", padding: "13px 14px", color: "#17221f", fontFamily: "inherit", fontSize: "14px", lineHeight: 1.5, resize: "vertical", outlineColor: "#0f766e", background: "#fbfcfb" },
-  primaryButton: { width: "100%", height: "48px", marginTop: "6px", border: 0, borderRadius: "7px", background: "#0f766e", color: "#fff", fontFamily: "inherit", fontSize: "15px", fontWeight: 750, cursor: "pointer" },
-  loginPrompt: { margin: "25px 0 0", color: "#42534c", fontSize: "14px" },
-  loginLink: { color: "#0f766e", fontWeight: 700, textDecoration: "underline", textUnderlineOffset: "3px" },
-  notice: { margin: "22px 0 0", paddingTop: "20px", borderTop: "1px solid #e8ece9", color: "#7a8580", fontSize: "12px", lineHeight: 1.6 },
-  link: { color: "#53615c", textUnderlineOffset: "2px" },
-  footer: { width: "min(1200px, calc(100% - 48px))", margin: "0 auto", padding: "22px 0 28px", color: "#8b9691", fontSize: "12px", borderTop: "1px solid #e3e8e4" },
-};
+function GoogleAuth({ onSignIn }: { onSignIn: () => void }) {
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+
+  const authTabs = [
+    { id: "login" as const, label: "로그인", icon: <UserRound className="h-4 w-4" /> },
+    { id: "signup" as const, label: "회원가입", icon: <UserPlus className="h-4 w-4" /> },
+  ];
+
+  const authCopy = {
+    login: {
+      eyebrow: "MEMBER LOGIN",
+      title: "로그인",
+      description: "Google 계정으로 결브릿지 서비스를 이용하세요.",
+      primaryAction: "Google로 로그인",
+    },
+    signup: {
+      eyebrow: "JOIN MEMBER",
+      title: "회원가입",
+      description: "Google 계정으로 기업 프로젝트 등록을 시작할 계정을 만듭니다.",
+      primaryAction: "Google로 회원가입",
+    },
+  }[authMode];
+
+  return (
+    <section className="mx-auto grid w-[min(1100px,calc(100%-40px))] flex-1 content-center py-12">
+      <div className="mb-8 border-b-2 border-[#17221f] pb-5">
+        <p className="mb-2 mt-0 text-xs font-extrabold tracking-[0.08em] text-[#b91c1c]">MEMBER SERVICE</p>
+        <h1 className="m-0 text-3xl font-black leading-tight tracking-normal">회원서비스</h1>
+      </div>
+
+      <div className="grid overflow-hidden rounded-lg border border-[#d7ded9] bg-white shadow-[0_14px_34px_rgba(23,34,31,0.07)] lg:grid-cols-[280px_minmax(0,1fr)]">
+        <nav className="border-b border-[#d7ded9] bg-[#f2f4f3] lg:border-b-0 lg:border-r">
+          {authTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setAuthMode(tab.id)}
+              className={
+                authMode === tab.id
+                  ? "flex h-16 w-full cursor-pointer items-center gap-3 border-0 border-b border-[#d7ded9] bg-[#b91c1c] px-5 text-left text-sm font-black text-white"
+                  : "flex h-16 w-full cursor-pointer items-center gap-3 border-0 border-b border-[#d7ded9] bg-transparent px-5 text-left text-sm font-extrabold text-[#42534c] hover:bg-white"
+              }
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+
+        <CardContent className="p-6 md:p-10">
+          <div className="mb-8 border-b border-[#e3e8e4] pb-6">
+            <p className="mb-2 mt-0 text-[11px] font-extrabold tracking-[0.08em] text-[#b91c1c]">{authCopy.eyebrow}</p>
+            <h2 className="m-0 text-2xl font-black tracking-normal md:text-3xl">{authCopy.title}</h2>
+            <p className="mb-0 mt-3 text-sm leading-6 text-[#53615c]">{authCopy.description}</p>
+          </div>
+
+          <div className="rounded-md border border-[#dce4df] bg-[#fbfcfb] p-5">
+            <p className="m-0 text-sm font-extrabold text-[#42534c]">Google 계정 인증</p>
+            <p className="mb-0 mt-2 text-sm leading-6 text-[#64706c]">별도 아이디와 비밀번호 없이 Google 계정으로만 진행합니다.</p>
+          </div>
+
+          <button type="button" onClick={onSignIn} className="mt-8 flex h-12 w-full cursor-pointer items-center justify-center rounded-md border-0 bg-[#b91c1c] px-5 text-base font-extrabold text-white transition hover:bg-[#991b1b]">
+            {authCopy.primaryAction}
+          </button>
+
+          <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[#64706c]">
+            <button type="button" onClick={() => setAuthMode("login")} className="cursor-pointer border-0 bg-transparent p-0 font-bold text-[#42534c]">로그인</button>
+            <button type="button" onClick={() => setAuthMode("signup")} className="cursor-pointer border-0 bg-transparent p-0 font-bold text-[#42534c]">회원가입</button>
+          </div>
+
+          {!isFirebaseConfigured ? <p className="mb-0 mt-6 border-t border-[#e3e8e4] pt-5 text-xs leading-5 text-[#b91c1c]">Firebase 환경변수가 없어서 현재는 화면 흐름 확인용으로 진입합니다.</p> : null}
+        </CardContent>
+      </div>
+    </section>
+  );
+}
+
+function RecruiterProjectInput({
+  form,
+  isReady,
+  isSubmitted,
+  userEmail,
+  onChange,
+  onSubmit,
+}: {
+  form: ProjectForm;
+  isReady: boolean;
+  isSubmitted: boolean;
+  userEmail: string;
+  onChange: (field: keyof ProjectForm, value: string) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <section className="mx-auto grid w-[min(1200px,calc(100%-32px))] gap-5 py-8 lg:grid-cols-[260px_minmax(0,1fr)]">
+      <aside className="rounded-lg border border-[#dde5e0] bg-white p-4">
+        <div className="mb-5 flex items-center gap-3 border-b border-[#e8ece9] pb-4">
+          <span className="grid h-10 w-10 place-items-center rounded-md bg-[#fee2e2] text-[#b91c1c]">
+            <BriefcaseBusiness className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <p className="m-0 text-sm font-black">7번 회사</p>
+            <p className="m-0 truncate text-xs text-[#64706c]">{userEmail}</p>
+          </div>
+        </div>
+        <p className="mb-3 mt-0 text-xs font-extrabold tracking-[0.08em] text-[#8b9691]">SECTION 3</p>
+        <nav className="grid gap-2">
+          {sidebarItems.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              className={
+                item.active
+                  ? "flex h-11 cursor-pointer items-center rounded-md border border-[#b91c1c] bg-[#fff8f8] px-4 text-left text-sm font-black text-[#b91c1c]"
+                  : "flex h-11 cursor-pointer items-center rounded-md border border-transparent bg-white px-4 text-left text-sm font-bold text-[#53615c] hover:bg-[#f8faf9]"
+              }
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      <div className="min-w-0">
+        <div className="mb-5 rounded-lg border border-[#dde5e0] bg-white p-5">
+          <Badge className="mb-4 bg-[#fee2e2] text-[#b91c1c]">인재 매칭</Badge>
+          <h1 className="m-0 text-2xl font-black leading-tight tracking-normal md:text-3xl">AI 웹 개발자 인력 등록 폼</h1>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-[#53615c]">기업이 원하는 인재를 찾기 위해 프로젝트, 예산, 기간, 필요 인력 정보를 입력합니다.</p>
+        </div>
+
+        <Card className="rounded-lg border-[#dde5e0] shadow-sm">
+          <CardContent className="grid gap-6 p-5 md:p-7">
+            <div className="grid gap-5 md:grid-cols-2">
+              <TextField label="제목/메뉴" value={form.title} placeholder="예: B2B SaaS AI 챗봇 MVP 개발" onChange={(value) => onChange("title", value)} />
+              <SelectField label="프로젝트 유형" value={form.projectType} options={projectTypeOptions} onChange={(value) => onChange("projectType", value)} />
+              <SelectField label="프로젝트 예산" value={form.budgetRange} options={budgetOptions} onChange={(value) => onChange("budgetRange", value)} />
+              <SelectField label="프로젝트 예상 기간" value={form.duration} options={durationOptions} onChange={(value) => onChange("duration", value)} />
+              <SelectField label="필요 인력 수" value={form.requiredHeadcount} options={headcountOptions} onChange={(value) => onChange("requiredHeadcount", value)} />
+              <SelectField label="프로젝트 시작 시기" value={form.startDate} options={startDateOptions} onChange={(value) => onChange("startDate", value)} />
+              <TextField label="필요 기술" value={form.requiredSkills} placeholder="예: React, Firebase, OpenAI API" onChange={(value) => onChange("requiredSkills", value)} />
+              <SelectField label="협업 방식" value={form.workMode} options={workModeOptions} onChange={(value) => onChange("workMode", value)} />
+            </div>
+
+            <TextAreaField label="구현 하고자 하는 기능" value={form.implementationScope} placeholder="필요 기능, 현재 상황, 원하는 결과물을 구체적으로 적어주세요." onChange={(value) => onChange("implementationScope", value)} />
+            <TextAreaField label="매칭 요청 내용" value={form.matchingRequest} placeholder="선호 경험, 투입 일정, 커뮤니케이션 방식 등 인재 조건을 적어주세요." onChange={(value) => onChange("matchingRequest", value)} />
+
+            <div className="grid gap-4 border-t border-[#e8ece9] pt-5 lg:grid-cols-[1fr_auto] lg:items-center">
+              <FormStatus form={form} />
+              <button type="button" disabled={!isReady} onClick={onSubmit} className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-md border-0 bg-[#b91c1c] px-5 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:bg-[#d8a0a0]">
+                조건 저장 후 인재 찾기
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {isSubmitted ? <RecommendedDevelopers /> : null}
+      </div>
+    </section>
+  );
+}
+
+function FormStatus({ form }: { form: ProjectForm }) {
+  return (
+    <div className="grid gap-2 text-sm text-[#64706c] sm:grid-cols-3">
+      <StatusChip icon={<FileText className="h-4 w-4" />} label="프로젝트" done={Boolean(form.title && form.implementationScope)} />
+      <StatusChip icon={<CircleDollarSign className="h-4 w-4" />} label="예산·기간" done={Boolean(form.budgetRange && form.duration)} />
+      <StatusChip icon={<UsersRound className="h-4 w-4" />} label="인력 조건" done={Boolean(form.requiredSkills && form.requiredHeadcount)} />
+    </div>
+  );
+}
+
+function RecommendedDevelopers() {
+  return (
+    <section className="mt-6">
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <h2 className="m-0 text-xl font-black tracking-normal">추천 개발자</h2>
+        <Badge className="bg-[#f1f5f9] text-[#42534c]">상위 3명</Badge>
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        {recommendedDevelopers.map((developer) => (
+          <Card key={developer.name} className="rounded-lg border-[#dde5e0]">
+            <CardContent className="p-5">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <p className="m-0 text-base font-black">{developer.name}</p>
+                  <p className="mt-1 text-sm text-[#64706c]">{developer.title}</p>
+                </div>
+                <span className="rounded-md bg-[#fee2e2] px-2.5 py-1 text-sm font-black text-[#b91c1c]">{developer.score}</span>
+              </div>
+              <p className="min-h-12 text-sm leading-6 text-[#53615c]">{developer.meta}</p>
+              <button type="button" className="mt-4 inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md border-0 bg-[#b91c1c] px-4 text-sm font-extrabold text-white">
+                매칭 신청
+                <CalendarDays className="h-4 w-4" />
+              </button>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TextField({ label, value, placeholder, onChange }: { label: string; value: string; placeholder: string; onChange: (value: string) => void }) {
+  return (
+    <label className="grid gap-2">
+      <span className="text-sm font-extrabold text-[#42534c]">{label}</span>
+      <input value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-md border border-[#dce4df] bg-[#fbfcfb] px-4 text-sm outline-[#b91c1c]" placeholder={placeholder} />
+    </label>
+  );
+}
+
+function SelectField({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+  return (
+    <label className="grid gap-2">
+      <span className="text-sm font-extrabold text-[#42534c]">{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-md border border-[#dce4df] bg-[#fbfcfb] px-4 text-sm outline-[#b91c1c]">
+        {options.map((option) => (
+          <option key={option}>{option}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function TextAreaField({ label, value, placeholder, onChange }: { label: string; value: string; placeholder: string; onChange: (value: string) => void }) {
+  return (
+    <label className="grid gap-2">
+      <span className="text-sm font-extrabold text-[#42534c]">{label}</span>
+      <textarea value={value} onChange={(event) => onChange(event.target.value)} className="min-h-28 resize-y rounded-md border border-[#dce4df] bg-[#fbfcfb] px-4 py-3 text-sm leading-6 outline-[#b91c1c]" placeholder={placeholder} />
+    </label>
+  );
+}
+
+function StatusChip({ icon, label, done }: { icon: ReactNode; label: string; done: boolean }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className={done ? "text-[#15803d]" : "text-[#94a3b8]"}>{done ? <CheckCircle2 className="h-4 w-4" /> : icon}</span>
+      <span>{label}</span>
+    </div>
+  );
+}
