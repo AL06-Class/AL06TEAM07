@@ -131,6 +131,8 @@ const candidates = [
     email: "sunsung.kim@example.com",
     phone: "010-1234-5601",
     resumeSummary: "3년차 백엔드 개발자로 RAG 파이프라인 설계·운영 경험 보유",
+    portfolioSummary: "RAG 기반 사내 검색 챗봇, 실시간 재고 문의 자동화 봇 등 프로덕션 배포 경험을 정리한 기술 블로그",
+    portfolioHighlights: ["RAG 검색 챗봇 아키텍처 정리", "LangChain 파이프라인 최적화 후기", "벡터DB 성능 비교 실험"],
   },
   {
     id: "app-002",
@@ -142,6 +144,8 @@ const candidates = [
     email: "hyedeok.choi@example.com",
     phone: "010-2345-6702",
     resumeSummary: "문서 자동화 및 사내 검색 서비스 개발 경험 3년",
+    portfolioSummary: "문서 자동화 파이프라인과 OCR·LLM 연동 사례를 정리한 기술 블로그",
+    portfolioHighlights: ["OCR+LLM 문서 요약 파이프라인", "사내 검색 인덱싱 구조 개선기", "문서 자동화 배포 회고"],
   },
   {
     id: "app-003",
@@ -153,6 +157,8 @@ const candidates = [
     email: "yunchae.park@example.com",
     phone: "010-3456-7803",
     resumeSummary: "LLM 서빙 인프라 구축과 대규모 트래픽 최적화 경험",
+    portfolioSummary: "LLM 서빙 인프라 최적화와 대규모 트래픽 대응 경험을 다룬 기술 블로그",
+    portfolioHighlights: ["vLLM 서빙 레이턴시 튜닝", "오토스케일링 아키텍처 설계", "GPU 비용 최적화 사례"],
   },
   {
     id: "app-004",
@@ -164,6 +170,8 @@ const candidates = [
     email: "hyunsoo.lee@example.com",
     phone: "010-4567-8904",
     resumeSummary: "프롬프트 설계 및 평가 자동화 파이프라인 구축 경험",
+    portfolioSummary: "프롬프트 엔지니어링과 평가 자동화 노하우를 공유하는 기술 블로그",
+    portfolioHighlights: ["프롬프트 A/B 테스트 프레임워크", "LLM 응답 품질 자동 평가", "few-shot 예제 선별 전략"],
   },
 ];
 
@@ -716,6 +724,19 @@ function ApplicationStatusPage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedCandidate, setSelectedCandidate] = useState<(typeof candidates)[number] | null>(null);
+  const [hoveredPortfolio, setHoveredPortfolio] = useState<{
+    candidate: (typeof candidates)[number];
+    rect: DOMRect;
+  } | null>(null);
+
+  const showPortfolioHologram = (
+    candidate: (typeof candidates)[number],
+    event: { currentTarget: HTMLElement }
+  ) => {
+    setHoveredPortfolio({ candidate, rect: event.currentTarget.getBoundingClientRect() });
+  };
+
+  const hidePortfolioHologram = () => setHoveredPortfolio(null);
 
   const stats = useMemo(() => {
     const hired = candidates.filter((candidate) => candidate.status === "hired").length;
@@ -841,6 +862,10 @@ function ApplicationStatusPage() {
                               className="name-link"
                               style={applicationStyles.nameLink}
                               onClick={() => setSelectedCandidate(candidate)}
+                              onMouseEnter={(event) => showPortfolioHologram(candidate, event)}
+                              onMouseLeave={hidePortfolioHologram}
+                              onFocus={(event) => showPortfolioHologram(candidate, event)}
+                              onBlur={hidePortfolioHologram}
                             >
                               {candidate.name}
                             </button>
@@ -865,7 +890,65 @@ function ApplicationStatusPage() {
       {selectedCandidate && (
         <CandidateModal candidate={selectedCandidate} onClose={() => setSelectedCandidate(null)} />
       )}
+
+      {hoveredPortfolio && (
+        <PortfolioHologramCard candidate={hoveredPortfolio.candidate} rect={hoveredPortfolio.rect} />
+      )}
     </main>
+  );
+}
+
+function PortfolioHologramCard({
+  candidate,
+  rect,
+}: {
+  candidate: (typeof candidates)[number];
+  rect: DOMRect;
+}) {
+  const viewportMargin = 16;
+  const cardWidth = 300;
+  const estimatedCardHeight = 240;
+
+  let left = rect.left;
+  if (left + cardWidth > window.innerWidth - viewportMargin) {
+    left = Math.max(viewportMargin, window.innerWidth - viewportMargin - cardWidth);
+  }
+
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const showAbove = spaceBelow < estimatedCardHeight && rect.top > estimatedCardHeight;
+  const top = showAbove ? rect.top - 8 : rect.bottom + 8;
+
+  return (
+    <div
+      className="hologram-portal"
+      style={{
+        ...applicationStyles.hologramWrap,
+        left,
+        top,
+        width: cardWidth,
+        transform: showAbove ? "translateY(-100%)" : undefined,
+      }}
+      aria-hidden="true"
+    >
+      <div className="hologram-border" style={applicationStyles.hologramBorder}>
+        <div className="hologram-card" style={applicationStyles.hologramCard}>
+          <div className="hologram-scanline" style={applicationStyles.hologramScanline} />
+          <div style={applicationStyles.hologramHeader}>
+            <span style={applicationStyles.hologramBadge}>● LIVE PORTFOLIO</span>
+            <strong style={applicationStyles.hologramName}>{candidate.name}</strong>
+            <span style={applicationStyles.hologramRole}>{candidate.role}</span>
+          </div>
+          <p style={applicationStyles.hologramSummary}>{candidate.portfolioSummary}</p>
+          <ul style={applicationStyles.hologramList}>
+            {candidate.portfolioHighlights.map((item) => (
+              <li key={item} style={applicationStyles.hologramListItem}>
+                ▹ {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1119,6 +1202,36 @@ const applicationStyles: Record<string, CSSProperties> = {
   modalRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", paddingBottom: "14px", borderBottom: "1px solid #f1f3f6", lineHeight: 1.5 },
   modalLabel: { margin: 0, color: "#7c8794", fontSize: "13px", fontWeight: 700 },
   modalValue: { margin: 0, color: "#0b1220", fontSize: "13px", fontWeight: 600, textAlign: "right" },
+  hologramWrap: { position: "fixed", zIndex: 200, pointerEvents: "none" },
+  hologramBorder: {
+    position: "relative",
+    overflow: "hidden",
+    padding: "1.5px",
+    borderRadius: "18px",
+    boxShadow: "0 0 24px rgba(42, 120, 214, 0.35), 0 18px 44px rgba(11, 18, 32, 0.45)",
+  },
+  hologramCard: {
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: "16.5px",
+    background: "linear-gradient(160deg, rgba(9, 16, 30, 0.94), rgba(15, 30, 54, 0.9))",
+    padding: "16px",
+    backdropFilter: "blur(6px)",
+  },
+  hologramScanline: {
+    position: "absolute",
+    inset: 0,
+    backgroundImage: "repeating-linear-gradient(0deg, rgba(125, 211, 252, 0.16) 0px, rgba(125, 211, 252, 0.16) 1px, transparent 2px, transparent 4px)",
+    backgroundSize: "100% 6px",
+    mixBlendMode: "screen",
+  },
+  hologramHeader: { display: "flex", flexDirection: "column", gap: "3px", marginBottom: "10px" },
+  hologramBadge: { color: "#7dd3fc", fontSize: "10px", fontWeight: 800, letterSpacing: "0.12em" },
+  hologramName: { color: "#fff", fontSize: "16px", fontWeight: 800 },
+  hologramRole: { color: "#9db8d9", fontSize: "12px" },
+  hologramSummary: { margin: "0 0 10px", color: "#cfe0f5", fontSize: "12px", lineHeight: 1.6 },
+  hologramList: { margin: 0, padding: 0, listStyle: "none", display: "grid", gap: "6px" },
+  hologramListItem: { color: "#a9c6ea", fontSize: "11.5px", lineHeight: 1.5 },
 };
 
 const statusDotColor: Record<StatusLevel, string> = {
