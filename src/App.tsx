@@ -898,6 +898,14 @@ function ApplicationStatusPage() {
   );
 }
 
+const demoDashboardBars = [
+  { width: "60%", tall: false },
+  { width: "100%", tall: true, split: true },
+  { width: "100%", tall: true },
+];
+
+const demoCodeLines = [92, 68, 80, 54, 74, 40, 62];
+
 function PortfolioHologramCard({
   candidate,
   rect,
@@ -907,11 +915,16 @@ function PortfolioHologramCard({
 }) {
   const viewportMargin = 16;
   const cardWidth = 300;
+  const demoWidth = 260;
+  const gap = 12;
   const estimatedCardHeight = 240;
 
+  const canShowDemo = window.innerWidth >= cardWidth + gap + demoWidth + viewportMargin * 2;
+  const totalWidth = canShowDemo ? cardWidth + gap + demoWidth : cardWidth;
+
   let left = rect.left;
-  if (left + cardWidth > window.innerWidth - viewportMargin) {
-    left = Math.max(viewportMargin, window.innerWidth - viewportMargin - cardWidth);
+  if (left + totalWidth > window.innerWidth - viewportMargin) {
+    left = Math.max(viewportMargin, window.innerWidth - viewportMargin - totalWidth);
   }
 
   const spaceBelow = window.innerHeight - rect.bottom;
@@ -925,12 +938,11 @@ function PortfolioHologramCard({
         ...applicationStyles.hologramWrap,
         left,
         top,
-        width: cardWidth,
         transform: showAbove ? "translateY(-100%)" : undefined,
       }}
       aria-hidden="true"
     >
-      <div className="hologram-border" style={applicationStyles.hologramBorder}>
+      <div className="hologram-border" style={{ ...applicationStyles.hologramBorder, width: cardWidth }}>
         <div className="hologram-card" style={applicationStyles.hologramCard}>
           <div className="hologram-scanline" style={applicationStyles.hologramScanline} />
           <div style={applicationStyles.hologramHeader}>
@@ -948,6 +960,69 @@ function PortfolioHologramCard({
           </ul>
         </div>
       </div>
+
+      {canShowDemo && (
+        <div className="hologram-border" style={{ ...applicationStyles.hologramBorder, width: demoWidth }}>
+          <div className="demo-panel" style={applicationStyles.demoPanel}>
+            <div style={applicationStyles.demoChrome}>
+              <span style={applicationStyles.demoDot} />
+              <span style={{ ...applicationStyles.demoDot, background: "#eab308" }} />
+              <span style={{ ...applicationStyles.demoDot, background: "#22c55e" }} />
+              <span style={applicationStyles.demoUrl}>{candidate.id}.portfolio.dev</span>
+            </div>
+
+            <div style={applicationStyles.demoScreen}>
+              <div className="demo-slide" style={applicationStyles.demoSlide}>
+                <div style={{ display: "grid", gap: "6px", padding: "10px", width: "100%" }}>
+                  {demoDashboardBars.map((bar, index) =>
+                    bar.split ? (
+                      <div key={index} style={{ display: "flex", gap: "6px" }}>
+                        {[0, 1, 2].map((col) => (
+                          <div key={col} style={{ ...applicationStyles.demoBar, flex: 1, height: "32px" }} />
+                        ))}
+                      </div>
+                    ) : (
+                      <div
+                        key={index}
+                        style={{
+                          ...applicationStyles.demoBar,
+                          width: bar.width,
+                          height: bar.tall ? "48px" : "10px",
+                          opacity: bar.tall ? 0.4 : 0.65,
+                        }}
+                      />
+                    )
+                  )}
+                </div>
+              </div>
+
+              <div className="demo-slide demo-slide-b" style={applicationStyles.demoSlide}>
+                <div style={{ display: "grid", gap: "7px", padding: "10px", width: "100%" }}>
+                  {demoCodeLines.map((width, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        ...applicationStyles.demoBar,
+                        width: `${width}%`,
+                        height: "8px",
+                        opacity: index % 2 === 0 ? 0.6 : 0.4,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div style={applicationStyles.demoFooter}>
+              <span className="demo-live-dot" style={applicationStyles.demoLiveDot} />
+              <span style={applicationStyles.demoFooterText}>AUTO DEMO PLAYING</span>
+            </div>
+            <div style={applicationStyles.demoProgressTrack}>
+              <div className="demo-progress-fill" style={applicationStyles.demoProgressFill} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1202,7 +1277,7 @@ const applicationStyles: Record<string, CSSProperties> = {
   modalRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", paddingBottom: "14px", borderBottom: "1px solid #f1f3f6", lineHeight: 1.5 },
   modalLabel: { margin: 0, color: "#7c8794", fontSize: "13px", fontWeight: 700 },
   modalValue: { margin: 0, color: "#0b1220", fontSize: "13px", fontWeight: 600, textAlign: "right" },
-  hologramWrap: { position: "fixed", zIndex: 200, pointerEvents: "none" },
+  hologramWrap: { position: "fixed", zIndex: 200, pointerEvents: "none", display: "flex", alignItems: "flex-start", gap: "12px" },
   hologramBorder: {
     position: "relative",
     overflow: "hidden",
@@ -1232,6 +1307,32 @@ const applicationStyles: Record<string, CSSProperties> = {
   hologramSummary: { margin: "0 0 10px", color: "#cfe0f5", fontSize: "12px", lineHeight: 1.6 },
   hologramList: { margin: 0, padding: 0, listStyle: "none", display: "grid", gap: "6px" },
   hologramListItem: { color: "#a9c6ea", fontSize: "11.5px", lineHeight: 1.5 },
+  demoPanel: {
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: "16.5px",
+    background: "linear-gradient(160deg, rgba(9, 16, 30, 0.94), rgba(15, 30, 54, 0.9))",
+    padding: "10px",
+    backdropFilter: "blur(6px)",
+  },
+  demoChrome: { display: "flex", alignItems: "center", gap: "5px", padding: "2px 4px 8px" },
+  demoDot: { width: "7px", height: "7px", borderRadius: "999px", background: "#ef4444", flex: "0 0 auto" },
+  demoUrl: { marginLeft: "6px", color: "#7c93b8", fontSize: "9.5px", letterSpacing: "0.02em" },
+  demoScreen: {
+    position: "relative",
+    height: "104px",
+    borderRadius: "10px",
+    background: "rgba(125, 211, 252, 0.05)",
+    border: "1px solid rgba(125, 211, 252, 0.14)",
+    overflow: "hidden",
+  },
+  demoSlide: { position: "absolute", inset: 0, display: "flex", alignItems: "center" },
+  demoBar: { background: "#7dd3fc", borderRadius: "4px" },
+  demoFooter: { display: "flex", alignItems: "center", gap: "6px", margin: "10px 0 6px" },
+  demoLiveDot: { width: "6px", height: "6px", borderRadius: "999px", background: "#7dd3fc", flex: "0 0 auto" },
+  demoFooterText: { color: "#7dd3fc", fontSize: "9.5px", fontWeight: 800, letterSpacing: "0.1em" },
+  demoProgressTrack: { height: "3px", borderRadius: "999px", background: "rgba(125, 211, 252, 0.15)", overflow: "hidden" },
+  demoProgressFill: { height: "100%", width: "0%", borderRadius: "999px", background: "linear-gradient(90deg, #2a78d6, #7dd3fc)" },
 };
 
 const statusDotColor: Record<StatusLevel, string> = {

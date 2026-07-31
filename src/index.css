@@ -182,3 +182,40 @@
     background-position-y: 24px;
   }
 }
+
+.applications-page .demo-slide {
+  animation: demo-fade 6s ease-in-out infinite;
+}
+
+.applications-page .demo-slide-b {
+  animation-delay: -3s;
+}
+
+.applications-page .demo-live-dot {
+  animation: hologram-flicker 1.4s ease-in-out infinite;
+}
+
+.applications-page .demo-progress-fill {
+  animation: demo-progress 3s linear infinite;
+}
+
+@keyframes demo-fade {
+  0%, 45% {
+    opacity: 1;
+  }
+  50%, 95% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes demo-progress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
