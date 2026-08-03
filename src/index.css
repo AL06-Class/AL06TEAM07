@@ -92,6 +92,14 @@
   background-color: #eef1f5;
 }
 
+.applications-page thead button {
+  transition: color 150ms ease;
+}
+
+.applications-page thead button:hover {
+  color: #184f95;
+}
+
 .applications-page .modal-box {
   animation: modal-pop 160ms ease;
 }

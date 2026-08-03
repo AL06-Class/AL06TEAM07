@@ -14,14 +14,23 @@ import {
   Users,
   UsersRound,
 } from "lucide-react";
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "./components/ui/badge";
 import { Card, CardContent } from "./components/ui/card";
 import { FreelancerRegisterPage } from "./pages/FreelancerRegisterPage";
 
 type SignupRole = "company" | "engineer";
 type View = "select" | SignupRole;
-type CandidateStatus = "hired" | "pending";
+type PipelineStage = "documentPassed" | "interviewing" | "finalPassed" | "rejected";
+
+const pipelineStageOrder: PipelineStage[] = ["documentPassed", "interviewing", "finalPassed", "rejected"];
+
+const pipelineStageLabel: Record<PipelineStage, string> = {
+  documentPassed: "서류합격",
+  interviewing: "면접중",
+  finalPassed: "최종합격",
+  rejected: "불합격",
+};
 
 type ProjectForm = {
   title: string;
@@ -126,7 +135,7 @@ const candidates = [
     name: "김선성",
     decision: "만족",
     decidedAt: "2026-06-28",
-    status: "hired" as const,
+    stage: "finalPassed" as const,
     role: "RAG 서비스 개발자",
     email: "sunsung.kim@example.com",
     phone: "010-1234-5601",
@@ -139,7 +148,7 @@ const candidates = [
     name: "최혜덕",
     decision: "불만족",
     decidedAt: "2026-06-28",
-    status: "hired" as const,
+    stage: "rejected" as const,
     role: "AI 문서 자동화 개발자",
     email: "hyedeok.choi@example.com",
     phone: "010-2345-6702",
@@ -152,7 +161,7 @@ const candidates = [
     name: "박윤채",
     decision: "만족",
     decidedAt: "2026-06-28",
-    status: "pending" as const,
+    stage: "interviewing" as const,
     role: "LLM 백엔드 개발자",
     email: "yunchae.park@example.com",
     phone: "010-3456-7803",
@@ -165,7 +174,7 @@ const candidates = [
     name: "이현수",
     decision: "만족",
     decidedAt: "2026-06-28",
-    status: "pending" as const,
+    stage: "documentPassed" as const,
     role: "프롬프트 엔지니어",
     email: "hyunsoo.lee@example.com",
     phone: "010-4567-8904",
@@ -670,7 +679,9 @@ function StatusChip({ icon, label, done }: { icon: ReactNode; label: string; don
   );
 }
 
-type StatusFilter = "all" | CandidateStatus;
+type StatusFilter = "all" | PipelineStage;
+type SortKey = "name" | "decision" | "decidedAt" | "stage";
+type SortDirection = "asc" | "desc";
 
 const dashboardNavItems = [
   { href: "#applications", label: "인력", fullLabel: "인력지원현황", icon: Users },
@@ -723,11 +734,21 @@ function DashboardHeader({ active }: { active: "applications" | "company" }) {
 function ApplicationStatusPage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection } | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<(typeof candidates)[number] | null>(null);
+  const nameButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [hoveredPortfolio, setHoveredPortfolio] = useState<{
     candidate: (typeof candidates)[number];
     rect: DOMRect;
   } | null>(null);
+
+  const closeCandidateModal = () => {
+    const idToRefocus = selectedCandidate?.id;
+    setSelectedCandidate(null);
+    if (idToRefocus) {
+      nameButtonRefs.current[idToRefocus]?.focus();
+    }
+  };
 
   const showPortfolioHologram = (
     candidate: (typeof candidates)[number],
@@ -739,21 +760,40 @@ function ApplicationStatusPage() {
   const hidePortfolioHologram = () => setHoveredPortfolio(null);
 
   const stats = useMemo(() => {
-    const hired = candidates.filter((candidate) => candidate.status === "hired").length;
+    const finalPassed = candidates.filter((candidate) => candidate.stage === "finalPassed").length;
+    const inProgress = candidates.filter(
+      (candidate) => candidate.stage === "documentPassed" || candidate.stage === "interviewing"
+    ).length;
     const satisfied = candidates.filter((candidate) => candidate.decision === "만족").length;
-    return { total: candidates.length, hired, pending: candidates.length - hired, satisfied };
+    return { total: candidates.length, finalPassed, inProgress, satisfied };
   }, []);
 
   const statusTabs: { key: StatusFilter; label: string; count: number }[] = [
-    { key: "all", label: "전체", count: stats.total },
-    { key: "hired", label: "채용", count: stats.hired },
-    { key: "pending", label: "미채용", count: stats.pending },
+    { key: "all", label: "전체", count: candidates.length },
+    ...pipelineStageOrder.map((stage) => ({
+      key: stage,
+      label: pipelineStageLabel[stage],
+      count: candidates.filter((candidate) => candidate.stage === stage).length,
+    })),
   ];
+
+  const toggleSort = (key: SortKey) => {
+    setSort((current) => {
+      if (!current || current.key !== key) return { key, direction: "asc" };
+      if (current.direction === "asc") return { key, direction: "desc" };
+      return null;
+    });
+  };
+
+  const sortArrow = (key: SortKey) => {
+    if (!sort || sort.key !== key) return "";
+    return sort.direction === "asc" ? " ▲" : " ▼";
+  };
 
   const filteredCandidates = useMemo(() => {
     const keyword = query.trim().toLowerCase();
-    return candidates.filter((candidate) => {
-      const matchesStatus = statusFilter === "all" || candidate.status === statusFilter;
+    const matched = candidates.filter((candidate) => {
+      const matchesStatus = statusFilter === "all" || candidate.stage === statusFilter;
       const matchesKeyword =
         !keyword ||
         [candidate.name, candidate.role, candidate.decision].some((value) =>
@@ -761,7 +801,17 @@ function ApplicationStatusPage() {
         );
       return matchesStatus && matchesKeyword;
     });
-  }, [query, statusFilter]);
+
+    if (!sort) return matched;
+
+    const direction = sort.direction === "asc" ? 1 : -1;
+    return [...matched].sort((a, b) => {
+      if (sort.key === "stage") {
+        return (pipelineStageOrder.indexOf(a.stage) - pipelineStageOrder.indexOf(b.stage)) * direction;
+      }
+      return a[sort.key].localeCompare(b[sort.key]) * direction;
+    });
+  }, [query, statusFilter, sort]);
 
   useEffect(() => {
     if (!selectedCandidate) return;
@@ -800,10 +850,10 @@ function ApplicationStatusPage() {
               {stats.total}
               <span style={applicationStyles.overviewHeroUnit}>명</span>
             </span>
-            <span style={applicationStyles.overviewHeroCaption}>채용 {stats.hired} · 미채용 {stats.pending}</span>
+            <span style={applicationStyles.overviewHeroCaption}>최종합격 {stats.finalPassed} · 진행중 {stats.inProgress}</span>
           </div>
           <div style={applicationStyles.overviewMeters}>
-            <Meter label="채용률" value={stats.hired} total={stats.total} />
+            <Meter label="최종합격률" value={stats.finalPassed} total={stats.total} />
             <Meter label="결정 만족도" value={stats.satisfied} total={stats.total} />
           </div>
         </section>
@@ -835,10 +885,26 @@ function ApplicationStatusPage() {
             <table style={applicationStyles.table}>
               <thead>
                 <tr>
-                  <th style={applicationStyles.th}>매칭인력</th>
-                  <th style={applicationStyles.th}>결정여부</th>
-                  <th style={applicationStyles.th}>결정일</th>
-                  <th style={applicationStyles.th}>채용여부</th>
+                  <th style={applicationStyles.th}>
+                    <button type="button" style={applicationStyles.sortButton} onClick={() => toggleSort("name")}>
+                      매칭인력{sortArrow("name")}
+                    </button>
+                  </th>
+                  <th style={applicationStyles.th}>
+                    <button type="button" style={applicationStyles.sortButton} onClick={() => toggleSort("decision")}>
+                      결정여부{sortArrow("decision")}
+                    </button>
+                  </th>
+                  <th style={applicationStyles.th}>
+                    <button type="button" style={applicationStyles.sortButton} onClick={() => toggleSort("decidedAt")}>
+                      결정일{sortArrow("decidedAt")}
+                    </button>
+                  </th>
+                  <th style={applicationStyles.th}>
+                    <button type="button" style={applicationStyles.sortButton} onClick={() => toggleSort("stage")}>
+                      진행 단계{sortArrow("stage")}
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -858,6 +924,9 @@ function ApplicationStatusPage() {
                           </span>
                           <div>
                             <button
+                              ref={(element) => {
+                                nameButtonRefs.current[candidate.id] = element;
+                              }}
                               type="button"
                               className="name-link"
                               style={applicationStyles.nameLink}
@@ -876,7 +945,7 @@ function ApplicationStatusPage() {
                       <td style={applicationStyles.td}>{candidate.decision}</td>
                       <td style={applicationStyles.td}>{candidate.decidedAt}</td>
                       <td style={applicationStyles.td}>
-                        <StatusBadge status={candidate.status} />
+                        <StageBadge stage={candidate.stage} />
                       </td>
                     </tr>
                   ))
@@ -888,7 +957,7 @@ function ApplicationStatusPage() {
       </section>
 
       {selectedCandidate && (
-        <CandidateModal candidate={selectedCandidate} onClose={() => setSelectedCandidate(null)} />
+        <CandidateModal candidate={selectedCandidate} onClose={closeCandidateModal} />
       )}
 
       {hoveredPortfolio && (
@@ -946,7 +1015,7 @@ function PortfolioHologramCard({
         <div className="hologram-card" style={applicationStyles.hologramCard}>
           <div className="hologram-scanline" style={applicationStyles.hologramScanline} />
           <div style={applicationStyles.hologramHeader}>
-            <span style={applicationStyles.hologramBadge}>● LIVE PORTFOLIO</span>
+            <span style={applicationStyles.hologramBadge}>● PORTFOLIO PREVIEW</span>
             <strong style={applicationStyles.hologramName}>{candidate.name}</strong>
             <span style={applicationStyles.hologramRole}>{candidate.role}</span>
           </div>
@@ -968,7 +1037,7 @@ function PortfolioHologramCard({
               <span style={applicationStyles.demoDot} />
               <span style={{ ...applicationStyles.demoDot, background: "#eab308" }} />
               <span style={{ ...applicationStyles.demoDot, background: "#22c55e" }} />
-              <span style={applicationStyles.demoUrl}>{candidate.id}.portfolio.dev</span>
+              <span style={applicationStyles.demoUrl}>미리보기 · 프로토타입</span>
             </div>
 
             <div style={applicationStyles.demoScreen}>
@@ -1015,11 +1084,12 @@ function PortfolioHologramCard({
 
             <div style={applicationStyles.demoFooter}>
               <span className="demo-live-dot" style={applicationStyles.demoLiveDot} />
-              <span style={applicationStyles.demoFooterText}>AUTO DEMO PLAYING</span>
+              <span style={applicationStyles.demoFooterText}>PORTFOLIO PREVIEW</span>
             </div>
             <div style={applicationStyles.demoProgressTrack}>
               <div className="demo-progress-fill" style={applicationStyles.demoProgressFill} />
             </div>
+            <p style={applicationStyles.demoCaption}>실제 포트폴리오 링크 연동 예정 · 지금은 프로토타입입니다</p>
           </div>
         </div>
       )}
@@ -1034,6 +1104,18 @@ function CandidateModal({
   candidate: (typeof candidates)[number];
   onClose: () => void;
 }) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
+
+  const trapFocus = (event: React.KeyboardEvent) => {
+    if (event.key !== "Tab") return;
+    event.preventDefault();
+    closeButtonRef.current?.focus();
+  };
+
   return (
     <div
       style={applicationStyles.modalOverlay}
@@ -1047,6 +1129,7 @@ function CandidateModal({
         aria-modal="true"
         aria-labelledby="candidate-modal-title"
         onClick={(event) => event.stopPropagation()}
+        onKeyDown={trapFocus}
       >
         <div style={applicationStyles.modalHeader}>
           <div style={applicationStyles.modalIdentity}>
@@ -1057,6 +1140,7 @@ function CandidateModal({
             </div>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             className="modal-close"
             style={applicationStyles.modalClose}
@@ -1087,9 +1171,9 @@ function CandidateModal({
             <dd style={applicationStyles.modalValue}>{candidate.decidedAt}</dd>
           </div>
           <div style={{ ...applicationStyles.modalRow, borderBottom: "none", paddingBottom: 0 }}>
-            <dt style={applicationStyles.modalLabel}>채용 여부</dt>
+            <dt style={applicationStyles.modalLabel}>진행 단계</dt>
             <dd style={applicationStyles.modalValue}>
-              <StatusBadge status={candidate.status} />
+              <StageBadge stage={candidate.stage} />
             </dd>
           </div>
         </dl>
@@ -1098,11 +1182,17 @@ function CandidateModal({
   );
 }
 
-function StatusBadge({ status }: { status: CandidateStatus }) {
-  const isHired = status === "hired";
+const pipelineBadgeStyleKey: Record<PipelineStage, "infoBadge" | "warningBadge" | "hiredBadge" | "rejectedBadge"> = {
+  documentPassed: "infoBadge",
+  interviewing: "warningBadge",
+  finalPassed: "hiredBadge",
+  rejected: "rejectedBadge",
+};
+
+function StageBadge({ stage }: { stage: PipelineStage }) {
   return (
-    <span style={isHired ? applicationStyles.hiredBadge : applicationStyles.pendingBadge}>
-      {isHired ? "채용" : "미채용"}
+    <span style={applicationStyles[pipelineBadgeStyleKey[stage]]}>
+      {pipelineStageLabel[stage]}
     </span>
   );
 }
@@ -1256,14 +1346,17 @@ const applicationStyles: Record<string, CSSProperties> = {
   tableWrap: { width: "100%", overflowX: "auto" },
   table: { width: "100%", borderCollapse: "collapse", minWidth: "560px" },
   th: { padding: "14px 18px", borderBottom: "1px solid #e5e9ee", background: "#f4f7fb", color: "#5b6472", textAlign: "left", fontSize: "12px", fontWeight: 800, letterSpacing: "0.02em" },
+  sortButton: { display: "inline-flex", alignItems: "center", gap: "3px", border: 0, background: "transparent", padding: 0, font: "inherit", color: "inherit", letterSpacing: "inherit", cursor: "pointer" },
   td: { padding: "18px", borderBottom: "1px solid #f0f2f5", color: "#2b3440", fontSize: "13px", lineHeight: 1.5, verticalAlign: "middle" },
   emptyCell: { padding: "40px 18px", textAlign: "center", color: "#7c8794", fontSize: "13px" },
   nameCell: { display: "flex", alignItems: "center", gap: "12px" },
   avatar: { flex: "0 0 auto", display: "grid", placeItems: "center", width: "36px", height: "36px", borderRadius: "999px", background: "#e8f1fc", color: "#184f95", fontSize: "14px", fontWeight: 800 },
   nameLink: { display: "block", padding: "2px 6px", margin: "0 0 0 -6px", border: 0, background: "transparent", color: "#184f95", fontFamily: "inherit", fontSize: "14px", fontWeight: 700, cursor: "pointer" },
   roleText: { display: "block", marginTop: "4px", color: "#7c8794", fontSize: "12px", lineHeight: 1.4 },
-  hiredBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "64px", height: "30px", borderRadius: "999px", background: "#dcfce7", color: "#166534", fontSize: "12px", fontWeight: 700 },
-  pendingBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "64px", height: "30px", borderRadius: "999px", background: "#eef1f5", color: "#4b5563", fontSize: "12px", fontWeight: 700 },
+  hiredBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "72px", height: "30px", borderRadius: "999px", background: "#dcfce7", color: "#166534", fontSize: "12px", fontWeight: 700 },
+  infoBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "72px", height: "30px", borderRadius: "999px", background: "#e8f1fc", color: "#184f95", fontSize: "12px", fontWeight: 700 },
+  warningBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "72px", height: "30px", borderRadius: "999px", background: "#fef3c7", color: "#92650a", fontSize: "12px", fontWeight: 700 },
+  rejectedBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "72px", height: "30px", borderRadius: "999px", background: "#fbe4e4", color: "#991b1b", fontSize: "12px", fontWeight: 700 },
   modalOverlay: { position: "fixed", inset: 0, background: "rgba(11, 18, 32, 0.55)", display: "grid", placeItems: "center", padding: "24px", zIndex: 50, backdropFilter: "blur(2px)" },
   modalBox: { width: "min(420px, 100%)", background: "#fff", borderRadius: "22px", padding: "28px", boxShadow: "0 30px 70px rgba(11, 18, 32, 0.28)" },
   modalHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "18px" },
@@ -1333,6 +1426,7 @@ const applicationStyles: Record<string, CSSProperties> = {
   demoFooterText: { color: "#7dd3fc", fontSize: "9.5px", fontWeight: 800, letterSpacing: "0.1em" },
   demoProgressTrack: { height: "3px", borderRadius: "999px", background: "rgba(125, 211, 252, 0.15)", overflow: "hidden" },
   demoProgressFill: { height: "100%", width: "0%", borderRadius: "999px", background: "linear-gradient(90deg, #2a78d6, #7dd3fc)" },
+  demoCaption: { margin: "8px 0 0", color: "#5a7095", fontSize: "9px", lineHeight: 1.4 },
 };
 
 const statusDotColor: Record<StatusLevel, string> = {
