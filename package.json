@@ -1,6 +1,7 @@
 {
   "name": "dksetting",
   "private": true,
+  "description": "Blogle2 hiring platform SPA",
   "version": "0.0.0",
   "type": "module",
   "scripts": {
