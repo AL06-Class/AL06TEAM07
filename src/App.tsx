@@ -8,20 +8,136 @@ import {
   ClipboardCheck,
   FileText,
   Home,
+  Languages,
+  Moon,
   Phone,
   RefreshCw,
   Search,
+  Sun,
   Users,
   UsersRound,
 } from "lucide-react";
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "./components/ui/badge";
 import { Card, CardContent } from "./components/ui/card";
 import { FreelancerRegisterPage } from "./pages/FreelancerRegisterPage";
 
 type SignupRole = "company" | "engineer";
 type View = "select" | SignupRole;
-type CandidateStatus = "hired" | "pending";
+type PipelineStage = "documentPassed" | "interviewing" | "finalPassed" | "rejected";
+type Locale = "ko" | "en";
+type Theme = "light" | "dark";
+
+const pipelineStageOrder: PipelineStage[] = ["documentPassed", "interviewing", "finalPassed", "rejected"];
+
+const pipelineStageLabelByLocale: Record<Locale, Record<PipelineStage, string>> = {
+  ko: {
+    documentPassed: "서류합격",
+    interviewing: "면접중",
+    finalPassed: "최종합격",
+    rejected: "불합격",
+  },
+  en: {
+    documentPassed: "Docs Passed",
+    interviewing: "Interviewing",
+    finalPassed: "Final Passed",
+    rejected: "Rejected",
+  },
+};
+
+const decisionLabelByLocale: Record<Locale, Record<string, string>> = {
+  ko: { "만족": "만족", "불만족": "불만족" },
+  en: { "만족": "Satisfied", "불만족": "Unsatisfied" },
+};
+
+const applicationsText: Record<Locale, {
+  eyebrow: string;
+  heading: string;
+  lead: string;
+  searchPlaceholder: string;
+  totalApplicants: string;
+  unit: string;
+  finalPassedShort: string;
+  inProgressShort: string;
+  finalPassRateLabel: string;
+  decisionSatisfactionLabel: string;
+  applicantListTitle: string;
+  allTab: string;
+  colName: string;
+  colDecision: string;
+  colDecidedAt: string;
+  colStage: string;
+  emptyState: string;
+  modalEmail: string;
+  modalPhone: string;
+  modalDecision: string;
+  modalDecidedAt: string;
+  modalStage: string;
+  modalClose: string;
+  hologramBadge: string;
+  demoUrl: string;
+  demoFooterText: string;
+  demoCaption: string;
+}> = {
+  ko: {
+    eyebrow: "RECRUITER DASHBOARD",
+    heading: "인력지원현황",
+    lead: "매칭 인력의 결정 여부와 채용 여부를 한눈에 확인하세요.",
+    searchPlaceholder: "이름, 직무, 결정 검색",
+    totalApplicants: "총 지원자",
+    unit: "명",
+    finalPassedShort: "최종합격",
+    inProgressShort: "진행중",
+    finalPassRateLabel: "최종합격률",
+    decisionSatisfactionLabel: "결정 만족도",
+    applicantListTitle: "지원자 목록",
+    allTab: "전체",
+    colName: "매칭인력",
+    colDecision: "결정여부",
+    colDecidedAt: "결정일",
+    colStage: "진행 단계",
+    emptyState: "검색 조건에 맞는 지원자가 없습니다.",
+    modalEmail: "이메일",
+    modalPhone: "연락처",
+    modalDecision: "결정 여부",
+    modalDecidedAt: "결정일",
+    modalStage: "진행 단계",
+    modalClose: "닫기",
+    hologramBadge: "● PORTFOLIO PREVIEW",
+    demoUrl: "미리보기 · 프로토타입",
+    demoFooterText: "PORTFOLIO PREVIEW",
+    demoCaption: "실제 포트폴리오 링크 연동 예정 · 지금은 프로토타입입니다",
+  },
+  en: {
+    eyebrow: "RECRUITER DASHBOARD",
+    heading: "Candidate Pipeline",
+    lead: "See decision status and hiring stage for matched candidates at a glance.",
+    searchPlaceholder: "Search by name, role, decision",
+    totalApplicants: "Total Applicants",
+    unit: "",
+    finalPassedShort: "Final passed",
+    inProgressShort: "In progress",
+    finalPassRateLabel: "Final Pass Rate",
+    decisionSatisfactionLabel: "Decision Satisfaction",
+    applicantListTitle: "Candidate List",
+    allTab: "All",
+    colName: "Candidate",
+    colDecision: "Decision",
+    colDecidedAt: "Decided On",
+    colStage: "Stage",
+    emptyState: "No candidates match your search.",
+    modalEmail: "Email",
+    modalPhone: "Phone",
+    modalDecision: "Decision",
+    modalDecidedAt: "Decided On",
+    modalStage: "Stage",
+    modalClose: "Close",
+    hologramBadge: "● PORTFOLIO PREVIEW",
+    demoUrl: "Preview · Prototype",
+    demoFooterText: "PORTFOLIO PREVIEW",
+    demoCaption: "Real portfolio link coming soon · this is a prototype",
+  },
+};
 
 type ProjectForm = {
   title: string;
@@ -126,44 +242,52 @@ const candidates = [
     name: "김선성",
     decision: "만족",
     decidedAt: "2026-06-28",
-    status: "hired" as const,
+    stage: "finalPassed" as const,
     role: "RAG 서비스 개발자",
     email: "sunsung.kim@example.com",
     phone: "010-1234-5601",
     resumeSummary: "3년차 백엔드 개발자로 RAG 파이프라인 설계·운영 경험 보유",
+    portfolioSummary: "RAG 기반 사내 검색 챗봇, 실시간 재고 문의 자동화 봇 등 프로덕션 배포 경험을 정리한 기술 블로그",
+    portfolioHighlights: ["RAG 검색 챗봇 아키텍처 정리", "LangChain 파이프라인 최적화 후기", "벡터DB 성능 비교 실험"],
   },
   {
     id: "app-002",
     name: "최혜덕",
     decision: "불만족",
     decidedAt: "2026-06-28",
-    status: "hired" as const,
+    stage: "rejected" as const,
     role: "AI 문서 자동화 개발자",
     email: "hyedeok.choi@example.com",
     phone: "010-2345-6702",
     resumeSummary: "문서 자동화 및 사내 검색 서비스 개발 경험 3년",
+    portfolioSummary: "문서 자동화 파이프라인과 OCR·LLM 연동 사례를 정리한 기술 블로그",
+    portfolioHighlights: ["OCR+LLM 문서 요약 파이프라인", "사내 검색 인덱싱 구조 개선기", "문서 자동화 배포 회고"],
   },
   {
     id: "app-003",
     name: "박윤채",
     decision: "만족",
     decidedAt: "2026-06-28",
-    status: "pending" as const,
+    stage: "interviewing" as const,
     role: "LLM 백엔드 개발자",
     email: "yunchae.park@example.com",
     phone: "010-3456-7803",
     resumeSummary: "LLM 서빙 인프라 구축과 대규모 트래픽 최적화 경험",
+    portfolioSummary: "LLM 서빙 인프라 최적화와 대규모 트래픽 대응 경험을 다룬 기술 블로그",
+    portfolioHighlights: ["vLLM 서빙 레이턴시 튜닝", "오토스케일링 아키텍처 설계", "GPU 비용 최적화 사례"],
   },
   {
     id: "app-004",
     name: "이현수",
     decision: "만족",
     decidedAt: "2026-06-28",
-    status: "pending" as const,
+    stage: "documentPassed" as const,
     role: "프롬프트 엔지니어",
     email: "hyunsoo.lee@example.com",
     phone: "010-4567-8904",
     resumeSummary: "프롬프트 설계 및 평가 자동화 파이프라인 구축 경험",
+    portfolioSummary: "프롬프트 엔지니어링과 평가 자동화 노하우를 공유하는 기술 블로그",
+    portfolioHighlights: ["프롬프트 A/B 테스트 프레임워크", "LLM 응답 품질 자동 평가", "few-shot 예제 선별 전략"],
   },
 ];
 
@@ -662,14 +786,16 @@ function StatusChip({ icon, label, done }: { icon: ReactNode; label: string; don
   );
 }
 
-type StatusFilter = "all" | CandidateStatus;
+type StatusFilter = "all" | PipelineStage;
+type SortKey = "name" | "decision" | "decidedAt" | "stage";
+type SortDirection = "asc" | "desc";
 
 const dashboardNavItems = [
   { href: "#applications", label: "인력", fullLabel: "인력지원현황", icon: Users },
   { href: "#company-support", label: "기업", fullLabel: "기업지원현황", icon: Building2 },
 ] as const;
 
-function DashboardHeader({ active }: { active: "applications" | "company" }) {
+function DashboardHeader({ active, extra }: { active: "applications" | "company"; extra?: ReactNode }) {
   return (
     <header style={chromeStyles.headerBar}>
       <div style={chromeStyles.headerInner}>
@@ -703,6 +829,7 @@ function DashboardHeader({ active }: { active: "applications" | "company" }) {
               );
             })}
           </nav>
+          {extra}
           <a href="#signup" className="home-link" style={chromeStyles.homeLink} aria-label="홈으로 이동" title="홈으로 이동">
             <Home size={16} />
           </a>
@@ -713,26 +840,71 @@ function DashboardHeader({ active }: { active: "applications" | "company" }) {
 }
 
 function ApplicationStatusPage() {
+  const [theme, setTheme] = useState<Theme>("light");
+  const [locale, setLocale] = useState<Locale>("ko");
+  const t = applicationsText[locale];
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection } | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<(typeof candidates)[number] | null>(null);
+  const nameButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [hoveredPortfolio, setHoveredPortfolio] = useState<{
+    candidate: (typeof candidates)[number];
+    rect: DOMRect;
+  } | null>(null);
+
+  const closeCandidateModal = () => {
+    const idToRefocus = selectedCandidate?.id;
+    setSelectedCandidate(null);
+    if (idToRefocus) {
+      nameButtonRefs.current[idToRefocus]?.focus();
+    }
+  };
+
+  const showPortfolioHologram = (
+    candidate: (typeof candidates)[number],
+    event: { currentTarget: HTMLElement }
+  ) => {
+    setHoveredPortfolio({ candidate, rect: event.currentTarget.getBoundingClientRect() });
+  };
+
+  const hidePortfolioHologram = () => setHoveredPortfolio(null);
 
   const stats = useMemo(() => {
-    const hired = candidates.filter((candidate) => candidate.status === "hired").length;
+    const finalPassed = candidates.filter((candidate) => candidate.stage === "finalPassed").length;
+    const inProgress = candidates.filter(
+      (candidate) => candidate.stage === "documentPassed" || candidate.stage === "interviewing"
+    ).length;
     const satisfied = candidates.filter((candidate) => candidate.decision === "만족").length;
-    return { total: candidates.length, hired, pending: candidates.length - hired, satisfied };
+    return { total: candidates.length, finalPassed, inProgress, satisfied };
   }, []);
 
   const statusTabs: { key: StatusFilter; label: string; count: number }[] = [
-    { key: "all", label: "전체", count: stats.total },
-    { key: "hired", label: "채용", count: stats.hired },
-    { key: "pending", label: "미채용", count: stats.pending },
+    { key: "all", label: t.allTab, count: candidates.length },
+    ...pipelineStageOrder.map((stage) => ({
+      key: stage,
+      label: pipelineStageLabelByLocale[locale][stage],
+      count: candidates.filter((candidate) => candidate.stage === stage).length,
+    })),
   ];
+
+  const toggleSort = (key: SortKey) => {
+    setSort((current) => {
+      if (!current || current.key !== key) return { key, direction: "asc" };
+      if (current.direction === "asc") return { key, direction: "desc" };
+      return null;
+    });
+  };
+
+  const sortArrow = (key: SortKey) => {
+    if (!sort || sort.key !== key) return "";
+    return sort.direction === "asc" ? " ▲" : " ▼";
+  };
 
   const filteredCandidates = useMemo(() => {
     const keyword = query.trim().toLowerCase();
-    return candidates.filter((candidate) => {
-      const matchesStatus = statusFilter === "all" || candidate.status === statusFilter;
+    const matched = candidates.filter((candidate) => {
+      const matchesStatus = statusFilter === "all" || candidate.stage === statusFilter;
       const matchesKeyword =
         !keyword ||
         [candidate.name, candidate.role, candidate.decision].some((value) =>
@@ -740,7 +912,17 @@ function ApplicationStatusPage() {
         );
       return matchesStatus && matchesKeyword;
     });
-  }, [query, statusFilter]);
+
+    if (!sort) return matched;
+
+    const direction = sort.direction === "asc" ? 1 : -1;
+    return [...matched].sort((a, b) => {
+      if (sort.key === "stage") {
+        return (pipelineStageOrder.indexOf(a.stage) - pipelineStageOrder.indexOf(b.stage)) * direction;
+      }
+      return a[sort.key].localeCompare(b[sort.key]) * direction;
+    });
+  }, [query, statusFilter, sort]);
 
   useEffect(() => {
     if (!selectedCandidate) return;
@@ -752,21 +934,47 @@ function ApplicationStatusPage() {
   }, [selectedCandidate]);
 
   return (
-    <main className="applications-page dashboard-shell" style={applicationStyles.page}>
-      <DashboardHeader active="applications" />
+    <main className="applications-page dashboard-shell" data-theme={theme} style={applicationStyles.page}>
+      <DashboardHeader
+        active="applications"
+        extra={
+          <>
+            <button
+              type="button"
+              className="locale-toggle"
+              style={chromeStyles.textToggleButton}
+              onClick={() => setLocale((current) => (current === "ko" ? "en" : "ko"))}
+              aria-label={locale === "ko" ? "Switch to English" : "한국어로 전환"}
+              title={locale === "ko" ? "Switch to English" : "한국어로 전환"}
+            >
+              {locale === "ko" ? "EN" : "KO"}
+            </button>
+            <button
+              type="button"
+              className="theme-toggle"
+              style={chromeStyles.iconToggleButton}
+              onClick={() => setTheme((current) => (current === "light" ? "dark" : "light"))}
+              aria-label={theme === "light" ? "다크모드로 전환" : "라이트모드로 전환"}
+              title={theme === "light" ? "다크모드로 전환" : "라이트모드로 전환"}
+            >
+              {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
+            </button>
+          </>
+        }
+      />
 
       <section style={applicationStyles.content}>
         <div className="applications-title-row" style={applicationStyles.titleRow}>
-          <p style={applicationStyles.eyebrow}>RECRUITER DASHBOARD</p>
-          <h1 style={applicationStyles.heading}>인력지원현황</h1>
-          <p style={applicationStyles.lead}>매칭 인력의 결정 여부와 채용 여부를 한눈에 확인하세요.</p>
+          <p style={applicationStyles.eyebrow}>{t.eyebrow}</p>
+          <h1 style={applicationStyles.heading}>{t.heading}</h1>
+          <p style={applicationStyles.lead}>{t.lead}</p>
 
           <label className="applications-search" style={applicationStyles.searchBox}>
             <Search size={16} />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="이름, 직무, 결정 검색"
+              placeholder={t.searchPlaceholder}
               style={applicationStyles.searchInput}
             />
           </label>
@@ -774,22 +982,22 @@ function ApplicationStatusPage() {
 
         <section style={applicationStyles.overviewCard} aria-label="종합 현황">
           <div className="overview-hero" style={applicationStyles.overviewHero}>
-            <span style={applicationStyles.overviewHeroLabel}>총 지원자</span>
+            <span style={applicationStyles.overviewHeroLabel}>{t.totalApplicants}</span>
             <span style={applicationStyles.overviewHeroValue}>
               {stats.total}
-              <span style={applicationStyles.overviewHeroUnit}>명</span>
+              <span style={applicationStyles.overviewHeroUnit}>{t.unit}</span>
             </span>
-            <span style={applicationStyles.overviewHeroCaption}>채용 {stats.hired} · 미채용 {stats.pending}</span>
+            <span style={applicationStyles.overviewHeroCaption}>{t.finalPassedShort} {stats.finalPassed} · {t.inProgressShort} {stats.inProgress}</span>
           </div>
           <div style={applicationStyles.overviewMeters}>
-            <Meter label="채용률" value={stats.hired} total={stats.total} />
-            <Meter label="결정 만족도" value={stats.satisfied} total={stats.total} />
+            <Meter label={t.finalPassRateLabel} value={stats.finalPassed} total={stats.total} unit={t.unit} />
+            <Meter label={t.decisionSatisfactionLabel} value={stats.satisfied} total={stats.total} unit={t.unit} />
           </div>
         </section>
 
         <section style={applicationStyles.tablePanel} aria-labelledby="applications-title">
           <div style={applicationStyles.panelHeaderRow}>
-            <h2 id="applications-title" style={applicationStyles.sectionTitle}>지원자 목록</h2>
+            <h2 id="applications-title" style={applicationStyles.sectionTitle}>{t.applicantListTitle}</h2>
             <div style={applicationStyles.statusTabs} role="tablist" aria-label="채용 상태 필터">
               {statusTabs.map((tab) => (
                 <button
@@ -814,17 +1022,33 @@ function ApplicationStatusPage() {
             <table style={applicationStyles.table}>
               <thead>
                 <tr>
-                  <th style={applicationStyles.th}>매칭인력</th>
-                  <th style={applicationStyles.th}>결정여부</th>
-                  <th style={applicationStyles.th}>결정일</th>
-                  <th style={applicationStyles.th}>채용여부</th>
+                  <th style={applicationStyles.th}>
+                    <button type="button" style={applicationStyles.sortButton} onClick={() => toggleSort("name")}>
+                      {t.colName}{sortArrow("name")}
+                    </button>
+                  </th>
+                  <th style={applicationStyles.th}>
+                    <button type="button" style={applicationStyles.sortButton} onClick={() => toggleSort("decision")}>
+                      {t.colDecision}{sortArrow("decision")}
+                    </button>
+                  </th>
+                  <th style={applicationStyles.th}>
+                    <button type="button" style={applicationStyles.sortButton} onClick={() => toggleSort("decidedAt")}>
+                      {t.colDecidedAt}{sortArrow("decidedAt")}
+                    </button>
+                  </th>
+                  <th style={applicationStyles.th}>
+                    <button type="button" style={applicationStyles.sortButton} onClick={() => toggleSort("stage")}>
+                      {t.colStage}{sortArrow("stage")}
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCandidates.length === 0 ? (
                   <tr>
                     <td style={applicationStyles.emptyCell} colSpan={4}>
-                      검색 조건에 맞는 지원자가 없습니다.
+                      {t.emptyState}
                     </td>
                   </tr>
                 ) : (
@@ -837,10 +1061,17 @@ function ApplicationStatusPage() {
                           </span>
                           <div>
                             <button
+                              ref={(element) => {
+                                nameButtonRefs.current[candidate.id] = element;
+                              }}
                               type="button"
                               className="name-link"
                               style={applicationStyles.nameLink}
                               onClick={() => setSelectedCandidate(candidate)}
+                              onMouseEnter={(event) => showPortfolioHologram(candidate, event)}
+                              onMouseLeave={hidePortfolioHologram}
+                              onFocus={(event) => showPortfolioHologram(candidate, event)}
+                              onBlur={hidePortfolioHologram}
                             >
                               {candidate.name}
                             </button>
@@ -848,10 +1079,10 @@ function ApplicationStatusPage() {
                           </div>
                         </div>
                       </td>
-                      <td style={applicationStyles.td}>{candidate.decision}</td>
+                      <td style={applicationStyles.td}>{decisionLabelByLocale[locale][candidate.decision]}</td>
                       <td style={applicationStyles.td}>{candidate.decidedAt}</td>
                       <td style={applicationStyles.td}>
-                        <StatusBadge status={candidate.status} />
+                        <StageBadge stage={candidate.stage} locale={locale} />
                       </td>
                     </tr>
                   ))
@@ -863,19 +1094,171 @@ function ApplicationStatusPage() {
       </section>
 
       {selectedCandidate && (
-        <CandidateModal candidate={selectedCandidate} onClose={() => setSelectedCandidate(null)} />
+        <CandidateModal candidate={selectedCandidate} onClose={closeCandidateModal} locale={locale} />
+      )}
+
+      {hoveredPortfolio && (
+        <PortfolioHologramCard candidate={hoveredPortfolio.candidate} rect={hoveredPortfolio.rect} locale={locale} />
       )}
     </main>
+  );
+}
+
+const demoDashboardBars = [
+  { width: "60%", tall: false },
+  { width: "100%", tall: true, split: true },
+  { width: "100%", tall: true },
+];
+
+const demoCodeLines = [92, 68, 80, 54, 74, 40, 62];
+
+function PortfolioHologramCard({
+  candidate,
+  rect,
+  locale,
+}: {
+  candidate: (typeof candidates)[number];
+  rect: DOMRect;
+  locale: Locale;
+}) {
+  const t = applicationsText[locale];
+  const viewportMargin = 16;
+  const cardWidth = 300;
+  const demoWidth = 260;
+  const gap = 12;
+  const estimatedCardHeight = 240;
+
+  const canShowDemo = window.innerWidth >= cardWidth + gap + demoWidth + viewportMargin * 2;
+  const totalWidth = canShowDemo ? cardWidth + gap + demoWidth : cardWidth;
+
+  let left = rect.left;
+  if (left + totalWidth > window.innerWidth - viewportMargin) {
+    left = Math.max(viewportMargin, window.innerWidth - viewportMargin - totalWidth);
+  }
+
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const showAbove = spaceBelow < estimatedCardHeight && rect.top > estimatedCardHeight;
+  const top = showAbove ? rect.top - 8 : rect.bottom + 8;
+
+  return (
+    <div
+      className="hologram-portal"
+      style={{
+        ...applicationStyles.hologramWrap,
+        left,
+        top,
+        transform: showAbove ? "translateY(-100%)" : undefined,
+      }}
+      aria-hidden="true"
+    >
+      <div className="hologram-border" style={{ ...applicationStyles.hologramBorder, width: cardWidth }}>
+        <div className="hologram-card" style={applicationStyles.hologramCard}>
+          <div className="hologram-scanline" style={applicationStyles.hologramScanline} />
+          <div style={applicationStyles.hologramHeader}>
+            <span style={applicationStyles.hologramBadge}>{t.hologramBadge}</span>
+            <strong style={applicationStyles.hologramName}>{candidate.name}</strong>
+            <span style={applicationStyles.hologramRole}>{candidate.role}</span>
+          </div>
+          <p style={applicationStyles.hologramSummary}>{candidate.portfolioSummary}</p>
+          <ul style={applicationStyles.hologramList}>
+            {candidate.portfolioHighlights.map((item) => (
+              <li key={item} style={applicationStyles.hologramListItem}>
+                ▹ {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {canShowDemo && (
+        <div className="hologram-border" style={{ ...applicationStyles.hologramBorder, width: demoWidth }}>
+          <div className="demo-panel" style={applicationStyles.demoPanel}>
+            <div style={applicationStyles.demoChrome}>
+              <span style={applicationStyles.demoDot} />
+              <span style={{ ...applicationStyles.demoDot, background: "#eab308" }} />
+              <span style={{ ...applicationStyles.demoDot, background: "#22c55e" }} />
+              <span style={applicationStyles.demoUrl}>{t.demoUrl}</span>
+            </div>
+
+            <div style={applicationStyles.demoScreen}>
+              <div className="demo-slide" style={applicationStyles.demoSlide}>
+                <div style={{ display: "grid", gap: "6px", padding: "10px", width: "100%" }}>
+                  {demoDashboardBars.map((bar, index) =>
+                    bar.split ? (
+                      <div key={index} style={{ display: "flex", gap: "6px" }}>
+                        {[0, 1, 2].map((col) => (
+                          <div key={col} style={{ ...applicationStyles.demoBar, flex: 1, height: "32px" }} />
+                        ))}
+                      </div>
+                    ) : (
+                      <div
+                        key={index}
+                        style={{
+                          ...applicationStyles.demoBar,
+                          width: bar.width,
+                          height: bar.tall ? "48px" : "10px",
+                          opacity: bar.tall ? 0.4 : 0.65,
+                        }}
+                      />
+                    )
+                  )}
+                </div>
+              </div>
+
+              <div className="demo-slide demo-slide-b" style={applicationStyles.demoSlide}>
+                <div style={{ display: "grid", gap: "7px", padding: "10px", width: "100%" }}>
+                  {demoCodeLines.map((width, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        ...applicationStyles.demoBar,
+                        width: `${width}%`,
+                        height: "8px",
+                        opacity: index % 2 === 0 ? 0.6 : 0.4,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div style={applicationStyles.demoFooter}>
+              <span className="demo-live-dot" style={applicationStyles.demoLiveDot} />
+              <span style={applicationStyles.demoFooterText}>{t.demoFooterText}</span>
+            </div>
+            <div style={applicationStyles.demoProgressTrack}>
+              <div className="demo-progress-fill" style={applicationStyles.demoProgressFill} />
+            </div>
+            <p style={applicationStyles.demoCaption}>{t.demoCaption}</p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
 function CandidateModal({
   candidate,
   onClose,
+  locale,
 }: {
   candidate: (typeof candidates)[number];
   onClose: () => void;
+  locale: Locale;
 }) {
+  const t = applicationsText[locale];
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
+
+  const trapFocus = (event: React.KeyboardEvent) => {
+    if (event.key !== "Tab") return;
+    event.preventDefault();
+    closeButtonRef.current?.focus();
+  };
+
   return (
     <div
       style={applicationStyles.modalOverlay}
@@ -889,6 +1272,7 @@ function CandidateModal({
         aria-modal="true"
         aria-labelledby="candidate-modal-title"
         onClick={(event) => event.stopPropagation()}
+        onKeyDown={trapFocus}
       >
         <div style={applicationStyles.modalHeader}>
           <div style={applicationStyles.modalIdentity}>
@@ -899,11 +1283,12 @@ function CandidateModal({
             </div>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             className="modal-close"
             style={applicationStyles.modalClose}
             onClick={onClose}
-            aria-label="닫기"
+            aria-label={t.modalClose}
           >
             ×
           </button>
@@ -913,25 +1298,25 @@ function CandidateModal({
 
         <dl style={applicationStyles.modalList}>
           <div style={applicationStyles.modalRow}>
-            <dt style={applicationStyles.modalLabel}>이메일</dt>
+            <dt style={applicationStyles.modalLabel}>{t.modalEmail}</dt>
             <dd style={applicationStyles.modalValue}>{candidate.email}</dd>
           </div>
           <div style={applicationStyles.modalRow}>
-            <dt style={applicationStyles.modalLabel}>연락처</dt>
+            <dt style={applicationStyles.modalLabel}>{t.modalPhone}</dt>
             <dd style={applicationStyles.modalValue}>{candidate.phone}</dd>
           </div>
           <div style={applicationStyles.modalRow}>
-            <dt style={applicationStyles.modalLabel}>결정 여부</dt>
-            <dd style={applicationStyles.modalValue}>{candidate.decision}</dd>
+            <dt style={applicationStyles.modalLabel}>{t.modalDecision}</dt>
+            <dd style={applicationStyles.modalValue}>{decisionLabelByLocale[locale][candidate.decision]}</dd>
           </div>
           <div style={applicationStyles.modalRow}>
-            <dt style={applicationStyles.modalLabel}>결정일</dt>
+            <dt style={applicationStyles.modalLabel}>{t.modalDecidedAt}</dt>
             <dd style={applicationStyles.modalValue}>{candidate.decidedAt}</dd>
           </div>
           <div style={{ ...applicationStyles.modalRow, borderBottom: "none", paddingBottom: 0 }}>
-            <dt style={applicationStyles.modalLabel}>채용 여부</dt>
+            <dt style={applicationStyles.modalLabel}>{t.modalStage}</dt>
             <dd style={applicationStyles.modalValue}>
-              <StatusBadge status={candidate.status} />
+              <StageBadge stage={candidate.stage} locale={locale} />
             </dd>
           </div>
         </dl>
@@ -940,11 +1325,17 @@ function CandidateModal({
   );
 }
 
-function StatusBadge({ status }: { status: CandidateStatus }) {
-  const isHired = status === "hired";
+const pipelineBadgeStyleKey: Record<PipelineStage, "infoBadge" | "warningBadge" | "hiredBadge" | "rejectedBadge"> = {
+  documentPassed: "infoBadge",
+  interviewing: "warningBadge",
+  finalPassed: "hiredBadge",
+  rejected: "rejectedBadge",
+};
+
+function StageBadge({ stage, locale }: { stage: PipelineStage; locale: Locale }) {
   return (
-    <span style={isHired ? applicationStyles.hiredBadge : applicationStyles.pendingBadge}>
-      {isHired ? "채용" : "미채용"}
+    <span style={applicationStyles[pipelineBadgeStyleKey[stage]]}>
+      {pipelineStageLabelByLocale[locale][stage]}
     </span>
   );
 }
@@ -1055,8 +1446,10 @@ const chromeStyles: Record<string, CSSProperties> = {
   headerLogo: { display: "inline-flex", alignItems: "center", gap: "8px", color: "#fff", textDecoration: "none", flex: "0 0 auto", minWidth: 0 },
   headerLogoMark: { display: "grid", placeItems: "center", width: "34px", height: "34px", borderRadius: "9px", background: "linear-gradient(135deg, #2a78d6 0%, #0b1220 100%)", color: "#fff", fontSize: "16px", fontWeight: 850, boxShadow: "0 8px 18px rgba(10, 20, 40, 0.35)" },
   headerLogoText: { fontSize: "20px", fontWeight: 850, letterSpacing: 0, color: "#fff" },
-  headerRight: { display: "flex", alignItems: "center", gap: "6px" },
+  headerRight: { display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", justifyContent: "flex-end" },
   homeLink: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: "36px", height: "36px", borderRadius: "999px", background: "rgba(255, 255, 255, 0.12)", color: "#fff", textDecoration: "none", flex: "0 0 auto" },
+  iconToggleButton: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: "36px", height: "36px", borderRadius: "999px", background: "rgba(255, 255, 255, 0.12)", color: "#fff", border: 0, cursor: "pointer", flex: "0 0 auto" },
+  textToggleButton: { display: "inline-flex", alignItems: "center", justifyContent: "center", height: "36px", padding: "0 12px", borderRadius: "999px", background: "rgba(255, 255, 255, 0.12)", color: "#fff", border: 0, cursor: "pointer", fontSize: "13px", fontWeight: 800, flex: "0 0 auto" },
   dashboardNav: { display: "flex", alignItems: "center", gap: "2px", background: "rgba(255, 255, 255, 0.08)", borderRadius: "999px", padding: "4px" },
   dashboardNavLink: { display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 12px", borderRadius: "999px", color: "#b7c6de", fontSize: "13px", fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" },
 };
@@ -1064,61 +1457,121 @@ const chromeStyles: Record<string, CSSProperties> = {
 const applicationStyles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
-    background: "#f4f7fb",
-    color: "#0b1220",
+    background: "var(--app-bg)",
+    color: "var(--text-primary)",
     fontFamily: "Pretendard, Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   },
   content: { width: "min(880px, calc(100% - 48px))", margin: "0 auto", padding: "48px 0 64px" },
   titleRow: { display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "4px", marginBottom: "28px" },
-  eyebrow: { margin: "0 0 4px", color: "#184f95", fontSize: "12px", letterSpacing: "0.1em", fontWeight: 800 },
-  heading: { margin: 0, fontSize: "32px", lineHeight: 1.25, letterSpacing: 0, color: "#0b1220" },
-  lead: { margin: "10px 0 0", color: "#5b6472", fontSize: "15px", lineHeight: 1.6 },
-  searchBox: { height: "46px", width: "min(360px, 100%)", marginTop: "22px", display: "flex", alignItems: "center", gap: "10px", border: "1px solid #dbe6f4", borderRadius: "999px", padding: "0 18px", color: "#5b6472", background: "#fff", boxShadow: "0 8px 20px rgba(11, 18, 32, 0.05)" },
-  searchInput: { width: "100%", border: 0, outline: 0, background: "transparent", color: "#0b1220", fontFamily: "inherit", fontSize: "14px" },
-  overviewCard: { display: "flex", flexWrap: "wrap", gap: "28px", border: "1px solid #e2e9f2", borderRadius: "20px", background: "#fff", padding: "28px", marginBottom: "20px", boxShadow: "0 18px 44px rgba(11, 18, 32, 0.06)" },
-  overviewHero: { display: "flex", flexDirection: "column", justifyContent: "center", gap: "4px", flex: "0 0 auto", paddingRight: "28px", borderRight: "1px solid #eef2f7" },
-  overviewHeroLabel: { color: "#7c8794", fontSize: "12px", fontWeight: 700 },
-  overviewHeroValue: { color: "#0b1220", fontSize: "40px", fontWeight: 800, lineHeight: 1.1 },
-  overviewHeroUnit: { fontSize: "16px", fontWeight: 700, color: "#7c8794", marginLeft: "4px" },
-  overviewHeroCaption: { color: "#5b6472", fontSize: "12px", marginTop: "4px" },
+  eyebrow: { margin: "0 0 4px", color: "var(--accent-text)", fontSize: "13px", letterSpacing: "0.1em", fontWeight: 800 },
+  heading: { margin: 0, fontSize: "34px", lineHeight: 1.25, letterSpacing: 0, color: "var(--text-primary)" },
+  lead: { margin: "10px 0 0", color: "var(--text-secondary)", fontSize: "16px", lineHeight: 1.6 },
+  searchBox: { height: "48px", width: "min(360px, 100%)", marginTop: "22px", display: "flex", alignItems: "center", gap: "10px", border: "1px solid var(--search-border)", borderRadius: "999px", padding: "0 18px", color: "var(--search-text)", background: "var(--search-bg)", boxShadow: "0 8px 20px rgba(11, 18, 32, 0.05)" },
+  searchInput: { width: "100%", border: 0, outline: 0, background: "transparent", color: "var(--text-primary)", fontFamily: "inherit", fontSize: "15px" },
+  overviewCard: { display: "flex", flexWrap: "wrap", gap: "28px", border: "1px solid var(--card-border)", borderRadius: "20px", background: "var(--card-bg)", padding: "28px", marginBottom: "20px", boxShadow: "0 18px 44px rgba(11, 18, 32, 0.06)" },
+  overviewHero: { display: "flex", flexDirection: "column", justifyContent: "center", gap: "4px", flex: "0 0 auto", paddingRight: "28px", borderRight: "1px solid var(--overview-divider)" },
+  overviewHeroLabel: { color: "var(--text-muted)", fontSize: "13px", fontWeight: 700 },
+  overviewHeroValue: { color: "var(--text-primary)", fontSize: "42px", fontWeight: 800, lineHeight: 1.1 },
+  overviewHeroUnit: { fontSize: "17px", fontWeight: 700, color: "var(--text-muted)", marginLeft: "4px" },
+  overviewHeroCaption: { color: "var(--text-secondary)", fontSize: "13px", marginTop: "4px" },
   overviewMeters: { flex: "1 1 220px", display: "grid", gap: "16px", alignContent: "center", minWidth: "220px" },
   meterRow: { display: "grid", gap: "6px" },
   meterHeader: { display: "flex", justifyContent: "space-between", alignItems: "baseline" },
-  meterLabel: { color: "#424d5a", fontSize: "13px", fontWeight: 700 },
-  meterPercent: { color: "#184f95", fontSize: "13px", fontWeight: 800 },
-  meterTrack: { height: "10px", borderRadius: "999px", background: "#e8f1fc" },
+  meterLabel: { color: "var(--text-secondary)", fontSize: "14px", fontWeight: 700 },
+  meterPercent: { color: "var(--accent-text)", fontSize: "14px", fontWeight: 800 },
+  meterTrack: { height: "10px", borderRadius: "999px", background: "var(--meter-track-bg)" },
   meterFill: { height: "100%", borderRadius: "999px", background: "#2a78d6" },
-  meterCaption: { color: "#7c8794", fontSize: "11px" },
-  tablePanel: { border: "1px solid #e2e9f2", borderRadius: "20px", background: "#fff", padding: "28px", boxShadow: "0 18px 44px rgba(11, 18, 32, 0.06)" },
+  meterCaption: { color: "var(--text-muted)", fontSize: "12px" },
+  tablePanel: { border: "1px solid var(--card-border)", borderRadius: "20px", background: "var(--card-bg)", padding: "28px", boxShadow: "0 18px 44px rgba(11, 18, 32, 0.06)" },
   panelHeaderRow: { display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "20px" },
-  sectionTitle: { margin: 0, color: "#0b1220", fontSize: "18px", fontWeight: 800, lineHeight: 1.3 },
-  statusTabs: { display: "flex", gap: "6px", background: "#f0f4f9", borderRadius: "999px", padding: "4px" },
-  statusTab: { border: 0, background: "transparent", borderRadius: "999px", padding: "7px 14px", fontFamily: "inherit", fontSize: "12px", fontWeight: 700, color: "#5b6472", cursor: "pointer" },
-  statusTabActive: { background: "#fff", color: "#184f95", boxShadow: "0 4px 12px rgba(11, 18, 32, 0.08)" },
+  sectionTitle: { margin: 0, color: "var(--text-primary)", fontSize: "19px", fontWeight: 800, lineHeight: 1.3 },
+  statusTabs: { display: "flex", flexWrap: "wrap", gap: "6px", background: "var(--tab-track-bg)", borderRadius: "999px", padding: "4px" },
+  statusTab: { border: 0, background: "transparent", borderRadius: "999px", padding: "7px 14px", fontFamily: "inherit", fontSize: "13px", fontWeight: 700, color: "var(--text-secondary)", cursor: "pointer" },
+  statusTabActive: { background: "var(--tab-active-bg)", color: "var(--accent-text)", boxShadow: "0 4px 12px rgba(11, 18, 32, 0.08)" },
   tableWrap: { width: "100%", overflowX: "auto" },
   table: { width: "100%", borderCollapse: "collapse", minWidth: "560px" },
-  th: { padding: "14px 18px", borderBottom: "1px solid #e5e9ee", background: "#f4f7fb", color: "#5b6472", textAlign: "left", fontSize: "12px", fontWeight: 800, letterSpacing: "0.02em" },
-  td: { padding: "18px", borderBottom: "1px solid #f0f2f5", color: "#2b3440", fontSize: "13px", lineHeight: 1.5, verticalAlign: "middle" },
-  emptyCell: { padding: "40px 18px", textAlign: "center", color: "#7c8794", fontSize: "13px" },
+  th: { padding: "14px 18px", borderBottom: "1px solid var(--table-header-border)", background: "var(--table-header-bg)", color: "var(--table-header-text)", textAlign: "left", fontSize: "13px", fontWeight: 800, letterSpacing: "0.02em" },
+  sortButton: { display: "inline-flex", alignItems: "center", gap: "3px", border: 0, background: "transparent", padding: 0, font: "inherit", color: "inherit", letterSpacing: "inherit", cursor: "pointer" },
+  td: { padding: "18px", borderBottom: "1px solid var(--table-row-border)", color: "var(--text-primary)", fontSize: "14px", lineHeight: 1.5, verticalAlign: "middle" },
+  emptyCell: { padding: "40px 18px", textAlign: "center", color: "var(--text-muted)", fontSize: "14px" },
   nameCell: { display: "flex", alignItems: "center", gap: "12px" },
-  avatar: { flex: "0 0 auto", display: "grid", placeItems: "center", width: "36px", height: "36px", borderRadius: "999px", background: "#e8f1fc", color: "#184f95", fontSize: "14px", fontWeight: 800 },
-  nameLink: { display: "block", padding: "2px 6px", margin: "0 0 0 -6px", border: 0, background: "transparent", color: "#184f95", fontFamily: "inherit", fontSize: "14px", fontWeight: 700, cursor: "pointer" },
-  roleText: { display: "block", marginTop: "4px", color: "#7c8794", fontSize: "12px", lineHeight: 1.4 },
-  hiredBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "64px", height: "30px", borderRadius: "999px", background: "#dcfce7", color: "#166534", fontSize: "12px", fontWeight: 700 },
-  pendingBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "64px", height: "30px", borderRadius: "999px", background: "#eef1f5", color: "#4b5563", fontSize: "12px", fontWeight: 700 },
+  avatar: { flex: "0 0 auto", display: "grid", placeItems: "center", width: "36px", height: "36px", borderRadius: "999px", background: "var(--accent-soft-bg, #e8f1fc)", color: "var(--accent-text)", fontSize: "15px", fontWeight: 800 },
+  nameLink: { display: "block", padding: "2px 6px", margin: "0 0 0 -6px", border: 0, background: "transparent", color: "var(--accent-text)", fontFamily: "inherit", fontSize: "15px", fontWeight: 700, cursor: "pointer" },
+  roleText: { display: "block", marginTop: "4px", color: "var(--text-muted)", fontSize: "13px", lineHeight: 1.4 },
+  hiredBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "78px", height: "31px", borderRadius: "999px", background: "var(--badge-good-bg)", color: "var(--badge-good-text)", fontSize: "13px", fontWeight: 700 },
+  infoBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "78px", height: "31px", borderRadius: "999px", background: "var(--badge-info-bg)", color: "var(--badge-info-text)", fontSize: "13px", fontWeight: 700 },
+  warningBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "78px", height: "31px", borderRadius: "999px", background: "var(--badge-warning-bg)", color: "var(--badge-warning-text)", fontSize: "13px", fontWeight: 700 },
+  rejectedBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "78px", height: "31px", borderRadius: "999px", background: "var(--badge-rejected-bg)", color: "var(--badge-rejected-text)", fontSize: "13px", fontWeight: 700 },
   modalOverlay: { position: "fixed", inset: 0, background: "rgba(11, 18, 32, 0.55)", display: "grid", placeItems: "center", padding: "24px", zIndex: 50, backdropFilter: "blur(2px)" },
-  modalBox: { width: "min(420px, 100%)", background: "#fff", borderRadius: "22px", padding: "28px", boxShadow: "0 30px 70px rgba(11, 18, 32, 0.28)" },
+  modalBox: { width: "min(420px, 100%)", background: "var(--card-bg)", borderRadius: "22px", padding: "28px", boxShadow: "0 30px 70px rgba(11, 18, 32, 0.28)" },
   modalHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "18px" },
   modalIdentity: { display: "flex", alignItems: "center", gap: "14px" },
-  modalAvatar: { flex: "0 0 auto", display: "grid", placeItems: "center", width: "48px", height: "48px", borderRadius: "999px", background: "#e8f1fc", color: "#184f95", fontSize: "18px", fontWeight: 800 },
-  modalTitle: { margin: 0, fontSize: "20px", fontWeight: 800, color: "#0b1220" },
-  modalSubtitle: { margin: "4px 0 0", fontSize: "13px", color: "#7c8794" },
-  modalSummary: { margin: "0 0 20px", padding: "14px 16px", background: "#f4f7fb", borderRadius: "14px", color: "#42534c", fontSize: "13px", lineHeight: 1.6 },
-  modalClose: { display: "grid", placeItems: "center", width: "32px", height: "32px", border: 0, borderRadius: "999px", background: "transparent", color: "#5b6472", fontSize: "20px", lineHeight: 1, cursor: "pointer", padding: 0 },
+  modalAvatar: { flex: "0 0 auto", display: "grid", placeItems: "center", width: "48px", height: "48px", borderRadius: "999px", background: "var(--accent-soft-bg, #e8f1fc)", color: "var(--accent-text)", fontSize: "19px", fontWeight: 800 },
+  modalTitle: { margin: 0, fontSize: "21px", fontWeight: 800, color: "var(--text-primary)" },
+  modalSubtitle: { margin: "4px 0 0", fontSize: "14px", color: "var(--text-muted)" },
+  modalSummary: { margin: "0 0 20px", padding: "14px 16px", background: "var(--modal-summary-bg)", borderRadius: "14px", color: "var(--text-secondary)", fontSize: "14px", lineHeight: 1.6 },
+  modalClose: { display: "grid", placeItems: "center", width: "32px", height: "32px", border: 0, borderRadius: "999px", background: "transparent", color: "var(--text-secondary)", fontSize: "20px", lineHeight: 1, cursor: "pointer", padding: 0 },
   modalList: { margin: 0, display: "grid", gap: "14px" },
-  modalRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", paddingBottom: "14px", borderBottom: "1px solid #f1f3f6", lineHeight: 1.5 },
-  modalLabel: { margin: 0, color: "#7c8794", fontSize: "13px", fontWeight: 700 },
-  modalValue: { margin: 0, color: "#0b1220", fontSize: "13px", fontWeight: 600, textAlign: "right" },
+  modalRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", paddingBottom: "14px", borderBottom: "1px solid var(--modal-row-border)", lineHeight: 1.5 },
+  modalLabel: { margin: 0, color: "var(--text-muted)", fontSize: "14px", fontWeight: 700 },
+  modalValue: { margin: 0, color: "var(--text-primary)", fontSize: "14px", fontWeight: 600, textAlign: "right" },
+  hologramWrap: { position: "fixed", zIndex: 200, pointerEvents: "none", display: "flex", alignItems: "flex-start", gap: "12px" },
+  hologramBorder: {
+    position: "relative",
+    overflow: "hidden",
+    padding: "1.5px",
+    borderRadius: "18px",
+    boxShadow: "0 0 24px rgba(42, 120, 214, 0.35), 0 18px 44px rgba(11, 18, 32, 0.45)",
+  },
+  hologramCard: {
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: "16.5px",
+    background: "linear-gradient(160deg, rgba(9, 16, 30, 0.94), rgba(15, 30, 54, 0.9))",
+    padding: "16px",
+    backdropFilter: "blur(6px)",
+  },
+  hologramScanline: {
+    position: "absolute",
+    inset: 0,
+    backgroundImage: "repeating-linear-gradient(0deg, rgba(125, 211, 252, 0.16) 0px, rgba(125, 211, 252, 0.16) 1px, transparent 2px, transparent 4px)",
+    backgroundSize: "100% 6px",
+    mixBlendMode: "screen",
+  },
+  hologramHeader: { display: "flex", flexDirection: "column", gap: "3px", marginBottom: "10px" },
+  hologramBadge: { color: "#7dd3fc", fontSize: "11px", fontWeight: 800, letterSpacing: "0.12em" },
+  hologramName: { color: "#fff", fontSize: "17px", fontWeight: 800 },
+  hologramRole: { color: "#9db8d9", fontSize: "13px" },
+  hologramSummary: { margin: "0 0 10px", color: "#cfe0f5", fontSize: "13px", lineHeight: 1.6 },
+  hologramList: { margin: 0, padding: 0, listStyle: "none", display: "grid", gap: "6px" },
+  hologramListItem: { color: "#a9c6ea", fontSize: "12.5px", lineHeight: 1.5 },
+  demoPanel: {
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: "16.5px",
+    background: "linear-gradient(160deg, rgba(9, 16, 30, 0.94), rgba(15, 30, 54, 0.9))",
+    padding: "10px",
+    backdropFilter: "blur(6px)",
+  },
+  demoChrome: { display: "flex", alignItems: "center", gap: "5px", padding: "2px 4px 8px" },
+  demoDot: { width: "7px", height: "7px", borderRadius: "999px", background: "#ef4444", flex: "0 0 auto" },
+  demoUrl: { marginLeft: "6px", color: "#7c93b8", fontSize: "10.5px", letterSpacing: "0.02em" },
+  demoScreen: {
+    position: "relative",
+    height: "104px",
+    borderRadius: "10px",
+    background: "rgba(125, 211, 252, 0.05)",
+    border: "1px solid rgba(125, 211, 252, 0.14)",
+    overflow: "hidden",
+  },
+  demoSlide: { position: "absolute", inset: 0, display: "flex", alignItems: "center" },
+  demoBar: { background: "#7dd3fc", borderRadius: "4px" },
+  demoFooter: { display: "flex", alignItems: "center", gap: "6px", margin: "10px 0 6px" },
+  demoLiveDot: { width: "6px", height: "6px", borderRadius: "999px", background: "#7dd3fc", flex: "0 0 auto" },
+  demoFooterText: { color: "#7dd3fc", fontSize: "10.5px", fontWeight: 800, letterSpacing: "0.1em" },
+  demoProgressTrack: { height: "3px", borderRadius: "999px", background: "rgba(125, 211, 252, 0.15)", overflow: "hidden" },
+  demoProgressFill: { height: "100%", width: "0%", borderRadius: "999px", background: "linear-gradient(90deg, #2a78d6, #7dd3fc)" },
+  demoCaption: { margin: "8px 0 0", color: "#5a7095", fontSize: "10px", lineHeight: 1.4 },
 };
 
 const statusDotColor: Record<StatusLevel, string> = {
