@@ -21,6 +21,7 @@ import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useStat
 import { Badge } from "./components/ui/badge";
 import { Card, CardContent } from "./components/ui/card";
 import { FreelancerRegisterPage } from "./pages/FreelancerRegisterPage";
+import type { Company, Warranty, WarrantyIssue } from "./services/companySupport";
 
 type SignupRole = "company" | "engineer";
 type View = "select" | SignupRole;
@@ -1590,21 +1591,43 @@ function StatusDot({ level, label }: { level: StatusLevel; label: string }) {
   );
 }
 
+const sampleCompany: Company = { id: "sample-company", name: "샘플기업" };
+const sampleWarranty: Warranty = {
+  id: "sample-warranty",
+  companyId: sampleCompany.id,
+  totalCount: 3,
+  usedCount: 1,
+  startedAt: "2026-07-01",
+  endsAt: "2027-07-01",
+};
+const sampleIssues: WarrantyIssue[] = [
+  { id: "sample-issue-01", companyId: sampleCompany.id, title: "초기 개발 환경 설정 확인", ownerName: "김민지", status: "completed", actionTaken: "개발 환경 점검 및 설정 가이드 전달 완료", reportedAt: "2026-07-03" },
+  { id: "sample-issue-02", companyId: sampleCompany.id, title: "배포 후 알림 기능 오류", ownerName: "이도윤", status: "inProgress", actionTaken: "원인 분석 및 수정 배포 진행 중", reportedAt: "2026-08-05" },
+];
+
 function CompanySupportStatusPage() {
-  const remainingWarranty = warrantyUsage.total - warrantyUsage.used;
-  const hasAttentionItem = warrantyItems.some((item) => item.status === "warning");
+  const [companyId, setCompanyId] = useState(sampleCompany.id);
+  // TODO: 백엔드가 companyId를 전달하면 이 선택창을 제거하고 Firestore 조회를 연결한다.
+  const companies = [sampleCompany];
+  const warranty = companyId === sampleCompany.id ? sampleWarranty : null;
+  const issues = companyId === sampleCompany.id ? sampleIssues : [];
+
+  const remainingWarranty = Math.max(0, (warranty?.totalCount ?? 0) - (warranty?.usedCount ?? 0));
+  const hasAttentionItem = issues.some((issue) => issue.status !== "completed");
 
   const warrantyProgress = useMemo(() => {
-    const start = new Date(warrantyPeriod.startedAt).getTime();
-    const end = new Date(warrantyPeriod.endsAt).getTime();
+    const start = new Date(warranty?.startedAt ?? "").getTime();
+    const end = new Date(warranty?.endsAt ?? "").getTime();
+    if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return 0;
     const ratio = Math.min(1, Math.max(0, (Date.now() - start) / (end - start)));
     return Math.round(ratio * 100);
-  }, []);
+  }, [warranty]);
 
   const remainingDays = useMemo(() => {
-    const end = new Date(warrantyPeriod.endsAt).getTime();
+    const end = new Date(warranty?.endsAt ?? "").getTime();
+    if (Number.isNaN(end)) return 0;
     return Math.max(0, Math.ceil((end - Date.now()) / (1000 * 60 * 60 * 24)));
-  }, []);
+  }, [warranty]);
 
   return (
     <main className="company-page dashboard-shell" style={companyStyles.page}>
@@ -1615,6 +1638,12 @@ function CompanySupportStatusPage() {
           <p style={companyStyles.eyebrow}>COMPANY SUPPORT</p>
           <h1 style={companyStyles.heading}>기업지원현황</h1>
           <p style={companyStyles.lead}>채용 이후 보증 지원 현황과 이슈 대응 절차를 확인하세요.</p>
+          <label style={companyStyles.companySelectLabel}>
+            조회할 기업
+            <select value={companyId} onChange={(event) => setCompanyId(event.target.value)} style={companyStyles.companySelect}>
+              {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+            </select>
+          </label>
         </div>
 
         <section
@@ -1627,7 +1656,7 @@ function CompanySupportStatusPage() {
           <CheckCircle2 size={20} />
           <div>
             <strong style={companyStyles.statusBannerTitle}>
-              {hasAttentionItem ? "일부 항목에 확인이 필요합니다" : "모든 보증 항목이 정상 운영 중입니다"}
+              {hasAttentionItem ? "처리할 이슈가 있습니다" : "처리할 이슈가 없습니다"}
             </strong>
             <span style={companyStyles.statusBannerCaption}>담당 PM이 상시 모니터링합니다</span>
           </div>
@@ -1640,22 +1669,22 @@ function CompanySupportStatusPage() {
               {remainingWarranty}
               <span style={companyStyles.overviewHeroUnit}>회</span>
             </span>
-            <span style={companyStyles.overviewHeroCaption}>총 {warrantyUsage.total}회 중 {warrantyUsage.used}회 사용</span>
+            <span style={companyStyles.overviewHeroCaption}>총 {warranty?.totalCount ?? 0}회 중 {warranty?.usedCount ?? 0}회 사용</span>
           </div>
           <div style={companyStyles.overviewMeters}>
             <Meter
               label="보증 사용률"
-              value={warrantyUsage.used}
-              total={warrantyUsage.total}
+              value={warranty?.usedCount ?? 0}
+              total={warranty?.totalCount ?? 0}
               theme={companyStyles}
-              caption={`${warrantyUsage.used} / ${warrantyUsage.total}회 사용`}
+              caption={`${warranty?.usedCount ?? 0} / ${warranty?.totalCount ?? 0}회 사용`}
             />
             <Meter
               label="보증 기간 경과율"
               value={warrantyProgress}
               total={100}
               theme={companyStyles}
-              caption={`잔여 약 ${remainingDays}일 · ${warrantyPeriod.endsAt}까지`}
+              caption={warranty ? `잔여 약 ${remainingDays}일 · ${warranty.endsAt}까지` : "등록된 보증 정보가 없습니다"}
             />
           </div>
         </section>
@@ -1675,7 +1704,10 @@ function CompanySupportStatusPage() {
                 </tr>
               </thead>
               <tbody>
-                {warrantyItems.map((item) => (
+                {(warranty ? [
+                  { id: "warranty-period", category: "보증 기간", coverage: `${warranty.startedAt} ~ ${warranty.endsAt}`, status: "good" as const, statusLabel: "활성", note: `${remainingDays}일 남음` },
+                  { id: "warranty-count", category: "보증 횟수", coverage: `잔여 ${remainingWarranty}회 / 총 ${warranty.totalCount}회`, status: remainingWarranty > 0 ? "info" as const : "warning" as const, statusLabel: remainingWarranty > 0 ? "사용 가능" : "소진", note: `${warranty.usedCount}회 사용` },
+                ] : []).map((item) => (
                   <tr key={item.id}>
                     <td style={companyStyles.td}>
                       <strong>{item.category}</strong>
@@ -1747,17 +1779,18 @@ function CompanySupportStatusPage() {
                 </tr>
               </thead>
               <tbody>
-                {issueHistory.map((entry) => (
+                {issues.map((entry) => (
                   <tr key={entry.id}>
-                    <td style={companyStyles.td}>{entry.date}</td>
-                    <td style={companyStyles.td}>{entry.issue}</td>
-                    <td style={companyStyles.td}>{entry.owner}</td>
+                    <td style={companyStyles.td}>{entry.reportedAt}</td>
+                    <td style={companyStyles.td}>{entry.title}</td>
+                    <td style={companyStyles.td}>{entry.ownerName}</td>
                     <td style={companyStyles.td}>
-                      <StatusDot level={entry.status} label={entry.statusLabel} />
+                      <StatusDot level={entry.status === "completed" ? "good" : entry.status === "inProgress" ? "info" : "warning"} label={entry.status === "completed" ? "완료" : entry.status === "inProgress" ? "처리 중" : "대기"} />
                     </td>
-                    <td style={companyStyles.td}>{entry.action}</td>
+                    <td style={companyStyles.td}>{entry.actionTaken}</td>
                   </tr>
                 ))}
+                {!issues.length && <tr><td colSpan={5} style={companyStyles.emptyCell}>등록된 이슈 이력이 없습니다.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -1779,6 +1812,10 @@ const companyStyles: Record<string, CSSProperties> = {
   eyebrow: { margin: "0 0 4px", color: "#991b1b", fontSize: "12px", letterSpacing: "0.1em", fontWeight: 800 },
   heading: { margin: 0, fontSize: "32px", lineHeight: 1.25, letterSpacing: 0, color: "#210b0b" },
   lead: { margin: "10px 0 0", color: "#6b5a5a", fontSize: "15px", lineHeight: 1.6 },
+  companySelectLabel: { display: "grid", gap: "6px", marginTop: "16px", color: "#5a4747", fontSize: "12px", fontWeight: 700, textAlign: "left" },
+  companySelect: { minWidth: "220px", border: "1px solid #e7cccc", borderRadius: "10px", background: "#fff", color: "#210b0b", padding: "10px 12px", fontSize: "14px" },
+  errorMessage: { margin: "0 0 20px", borderRadius: "12px", background: "#fff1f1", color: "#a61b1b", padding: "14px 16px", fontSize: "13px", fontWeight: 700 },
+  emptyMessage: { margin: "0 0 20px", borderRadius: "12px", background: "#fff", color: "#6b5a5a", padding: "14px 16px", fontSize: "13px", textAlign: "center" },
   statusBanner: { display: "flex", alignItems: "center", gap: "14px", borderRadius: "16px", padding: "16px 20px", marginBottom: "20px" },
   statusBannerGood: { background: "#e9f9e9", color: "#0a6b0a", border: "1px solid #cdeecd" },
   statusBannerWarning: { background: "#fef7e0", color: "#8a6205", border: "1px solid #f6e3ab" },
@@ -1805,6 +1842,7 @@ const companyStyles: Record<string, CSSProperties> = {
   table: { width: "100%", borderCollapse: "collapse", minWidth: "520px" },
   th: { padding: "14px 18px", borderBottom: "1px solid #f0e5e5", background: "#fbf5f5", color: "#5a4747", textAlign: "left", fontSize: "12px", fontWeight: 800, letterSpacing: "0.02em" },
   td: { padding: "18px", borderBottom: "1px solid #f5eaea", color: "#2b2020", fontSize: "13px", lineHeight: 1.5, verticalAlign: "middle" },
+  emptyCell: { padding: "28px 18px", color: "#8a7373", fontSize: "13px", textAlign: "center" },
   statusDot: { display: "inline-flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: 700, color: "#2b2020" },
   statusDotMark: { width: "9px", height: "9px", borderRadius: "999px", flex: "0 0 auto" },
   secondaryRow: { display: "grid", gridTemplateColumns: "minmax(240px, 1fr) minmax(300px, 1.6fr)", gap: "20px", marginBottom: "20px" },
