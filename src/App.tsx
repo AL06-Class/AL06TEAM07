@@ -2,7 +2,6 @@ import {
   ArrowRight,
   BriefcaseBusiness,
   Building2,
-  CalendarDays,
   CheckCircle2,
   CircleDollarSign,
   ClipboardCheck,
@@ -17,14 +16,21 @@ import {
   Users,
   UsersRound,
 } from "lucide-react";
+import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup } from "firebase/auth";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "./components/ui/badge";
 import { Card, CardContent } from "./components/ui/card";
+import { firebaseApp, firebaseDb, isFirebaseConfigured } from "./lib/firebase";
 import { FreelancerRegisterPage } from "./pages/FreelancerRegisterPage";
 import { getCompanies, getCompanySupport, type Company, type CompanySupportGuide, type SupportGuideCardType, type Warranty, type WarrantyIssue } from "./services/companySupport";
 
 type SignupRole = "company" | "engineer";
-type View = "select" | SignupRole;
+type UserRole = "candidate" | "recruiter";
+type View = "select" | "login" | SignupRole;
+type CandidateStatus = "hired" | "pending";
+type RecruiterView = "project" | "matched" | "warranty";
+type MatchingStage = "selecting" | "requested" | "accepted" | "scheduling" | "confirmed" | "completed" | "failed";
 type PipelineStage = "documentPassed" | "interviewing" | "finalPassed" | "rejected";
 type Locale = "ko" | "en";
 type Theme = "light" | "dark";
@@ -170,26 +176,6 @@ const roleOptions = [
   },
 ];
 
-const companyFields = [
-  { label: "기업명", placeholder: "예: Blogle2" },
-  { label: "담당자명", placeholder: "예: 김담당" },
-  { label: "업무 이메일", placeholder: "name@company.com" },
-  { label: "희망 프로젝트 유형", placeholder: "예: AI 챗봇, 문서 자동화" },
-];
-
-const engineerFields = [
-  { label: "이름", placeholder: "예: 김개발" },
-  { label: "이메일", placeholder: "name@email.com" },
-  { label: "주요 기술 스택", placeholder: "예: Python, React, LangChain" },
-  { label: "대표 프로젝트", placeholder: "예: RAG 기반 사내 검색 서비스" },
-];
-
-const benefits = [
-  "역할에 맞는 필수 정보만 입력",
-  "가입 후 전용 대시보드로 이동",
-  "검증·매칭 흐름과 자연스럽게 연결",
-];
-
 const projectTypeOptions = ["AI 챗봇", "문서 자동화", "추천 시스템", "RAG 검색", "업무 자동화"];
 const budgetOptions = ["500만원 미만", "500만-1,000만원", "1,000만-3,000만원", "3,000만원 이상"];
 const durationOptions = ["2주 이내", "1개월", "2-3개월", "3개월 이상"];
@@ -211,9 +197,9 @@ const initialProjectForm: ProjectForm = {
 };
 
 const projectSidebarItems = [
-  { label: "검증 인재", active: false },
-  { label: "인재 매칭", active: true },
-  { label: "보증 현황", active: false },
+  { id: "project" as const, label: "프로젝트 입력" },
+  { id: "matched" as const, label: "매칭된 인재" },
+  { id: "warranty" as const, label: "보증 현황" },
 ];
 
 const recommendedDevelopers = [
@@ -222,20 +208,34 @@ const recommendedDevelopers = [
     title: "RAG · 문서 자동화",
     score: 94,
     meta: "React, Firebase, OpenAI API",
+    experience: "5년차 AI 서비스 개발자",
+    availability: "2주 이내 투입 가능",
+    projectHistory: "사내 문서 검색 RAG, 고객센터 자동 응답, 계약서 요약 자동화",
+    verification: "과제 검증 상위 8%",
   },
   {
     name: "박도윤",
     title: "AI 챗봇 · 업무 자동화",
     score: 91,
     meta: "LangChain, Node.js, Slack Bot",
+    experience: "4년차 풀스택 개발자",
+    availability: "즉시 투입 가능",
+    projectHistory: "Slack 업무 자동화, FAQ 챗봇, 영업 리드 분류 자동화",
+    verification: "과제 검증 상위 12%",
   },
   {
     name: "정서연",
     title: "추천 시스템 · 데이터 설계",
     score: 88,
     meta: "Python, 데이터 파이프라인, MVP",
+    experience: "6년차 데이터 기반 제품 개발자",
+    availability: "1개월 이내 투입 가능",
+    projectHistory: "콘텐츠 추천 MVP, 사용자 행동 분석, 데이터 파이프라인 구축",
+    verification: "과제 검증 상위 15%",
   },
 ];
+
+const interviewTimeOptions = ["2026-08-12 10:00", "2026-08-12 14:00", "2026-08-13 11:00"];
 
 const candidates = [
   {
@@ -332,6 +332,12 @@ const warrantyItems = [
   },
 ];
 
+const recruiterWarrantySteps = [
+  { title: "대시보드 확인", description: "보증 현황 표에서 이슈 항목과 잔여 보증 횟수를 확인합니다." },
+  { title: "보증 실행 요청", description: "담당 PM에게 보증 실행을 요청하고 이슈 내용을 전달합니다." },
+  { title: "대체 개발자 투입", description: "예비 인력 Pool에서 후보자를 매칭해 인수인계를 진행합니다." },
+];
+
 const supportCardMetadata: Record<SupportGuideCardType, { icon: typeof Phone; title: string }> = {
   hotline: { icon: Phone, title: "긴급 호출" },
   replacement: { icon: RefreshCw, title: "교체 프로세스" },
@@ -383,7 +389,7 @@ export default function App() {
   }
 
   if (route === "#company-support") {
-    return <CompanySupportStatusPage />;
+    return <RecruiterProjectInputPage initialView="warranty" />;
   }
 
   if (route === "#freelancer-register") {
@@ -398,11 +404,30 @@ export default function App() {
 }
 
 function SignupPage() {
-  const [view, setView] = useState<View>("select");
+  const [view, setView] = useState<View>(() => {
+    if (window.location.hash === "#company-signup") return "company";
+    if (window.location.hash === "#engineer-signup") return "engineer";
+    if (window.location.hash === "#login") return "login";
+    return "select";
+  });
+
+  useEffect(() => {
+    const syncView = () => {
+      if (window.location.hash === "#company-signup") setView("company");
+      if (window.location.hash === "#engineer-signup") setView("engineer");
+      if (window.location.hash === "#login") setView("login");
+      if (window.location.hash === "#signup" || window.location.hash === "") setView("select");
+    };
+
+    syncView();
+    window.addEventListener("hashchange", syncView);
+    return () => window.removeEventListener("hashchange", syncView);
+  }, []);
 
   const activeTitle = useMemo(() => {
     if (view === "company") return "기업 회원가입";
     if (view === "engineer") return "AI 엔지니어 회원가입";
+    if (view === "login") return "로그인";
     return "회원가입";
   }, [view]);
 
@@ -427,43 +452,20 @@ function SignupPage() {
       </header>
 
       <section style={styles.content}>
-        <div style={styles.intro}>
-          <span style={styles.eyebrow}>CREATE YOUR ACCOUNT</span>
-          <h1 style={styles.heading}>
-            {view === "select" ? (
-              <>
-                역할에 맞게 가입하고,
-                <br />
-                AI 프로젝트를 시작하세요.
-              </>
-            ) : (
-              <>
-                {activeTitle}으로,
-                <br />
-                필요한 정보만 빠르게 등록하세요.
-              </>
-            )}
-          </h1>
-          <p style={styles.lead}>
-            Blogle2는 기업과 AI 엔지니어의 가입 흐름을 분리해, 가입 직후 필요한 기능으로 바로 이어지게 구성합니다.
-          </p>
-
-          <div style={styles.benefits}>
-            {benefits.map((benefit, index) => (
-              <div key={benefit} style={styles.benefit}>
-                <span style={styles.checkMark}>{index + 1}</span>
-                <span style={styles.benefitText}>{benefit}</span>
-              </div>
-            ))}
+        {view === "select" ? null : (
+          <div style={styles.intro}>
+            <h1 style={styles.heading}>
+              {activeTitle}으로,
+              <br />
+              필요한 정보만 빠르게 등록하세요.
+            </h1>
           </div>
-        </div>
+        )}
 
         <section style={styles.panel} aria-labelledby="signup-title">
-          {view === "select" ? (
-            <SignupSelect onSelect={openSignup} />
-          ) : (
-            <SignupForm role={view} onBack={goSelect} />
-          )}
+          {view === "select" ? <SignupSelect onSelect={openSignup} /> : null}
+          {view === "login" ? <GoogleLoginPanel onBack={goSelect} /> : null}
+          {view === "company" || view === "engineer" ? <GoogleSignupPanel role={view} onBack={goSelect} /> : null}
         </section>
       </section>
 
@@ -476,7 +478,7 @@ function SignupSelect({ onSelect }: { onSelect: (role: SignupRole) => void }) {
   return (
     <>
       <div style={styles.panelHeader}>
-        <p style={styles.panelEyebrow}>WELCOME TO BLOGLE2</p>
+        <p style={styles.panelEyebrow}>WELCOME TO GYEOL-BRIDGE</p>
         <h2 id="signup-title" style={styles.panelTitle}>회원가입</h2>
         <p style={styles.panelDescription}>가입할 유형을 선택하면 해당 가입 페이지로 바로 이동합니다.</p>
       </div>
@@ -502,9 +504,116 @@ function SignupSelect({ onSelect }: { onSelect: (role: SignupRole) => void }) {
   );
 }
 
-function SignupForm({ role, onBack }: { role: SignupRole; onBack: () => void }) {
+function GoogleLoginPanel({ onBack }: { onBack: () => void }) {
+  const [message, setMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const startGoogleLogin = async () => {
+    setMessage("");
+
+    if (!firebaseApp || !firebaseDb || !isFirebaseConfigured) {
+      setMessage("Firebase 설정이 없어 Google 로그인을 실행할 수 없습니다.");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const auth = getAuth(firebaseApp);
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const userSnapshot = await getDoc(doc(firebaseDb, "users", result.user.uid));
+
+      if (!userSnapshot.exists()) {
+        setMessage("가입 정보가 없습니다. 먼저 기업 또는 AI 엔지니어 회원가입을 진행해 주세요.");
+        return;
+      }
+
+      const role = userSnapshot.data().role as UserRole | undefined;
+
+      if (role === "recruiter") {
+        window.location.hash = "#recruiter-project-input";
+        return;
+      }
+
+      if (role === "candidate") {
+        window.location.hash = "#freelancer-register";
+        return;
+      }
+
+      setMessage("회원 유형을 확인할 수 없습니다. 다시 가입해 주세요.");
+    } catch {
+      setMessage("Google 로그인이 완료되지 않았습니다. 다시 시도해 주세요.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <button type="button" onClick={onBack} style={styles.backButton}>
+        ← 회원가입 화면으로 돌아가기
+      </button>
+
+      <div style={styles.panelHeader}>
+        <p style={styles.panelEyebrow}>GOOGLE LOGIN</p>
+        <h2 id="signup-title" style={styles.panelTitle}>로그인</h2>
+        <p style={styles.panelDescription}>가입한 Google 계정으로 로그인하면 회원 유형에 맞는 화면으로 이동합니다.</p>
+      </div>
+
+      <div style={styles.googleSignupBox}>
+        <span style={styles.googleRoleBadge}>기존 회원</span>
+        <p style={styles.googleSignupText}>기업 회원은 프로젝트 입력 화면으로, AI 엔지니어 회원은 프리랜서 등록 화면으로 이동합니다.</p>
+        <button type="button" style={styles.googleButton} onClick={startGoogleLogin} disabled={isLoading}>
+          <span style={styles.googleMark}>G</span>
+          {isLoading ? "Google 로그인 진행 중" : "Google 계정으로 로그인"}
+        </button>
+        {message ? <p style={styles.errorMessage}>{message}</p> : null}
+      </div>
+    </>
+  );
+}
+
+function GoogleSignupPanel({ role, onBack }: { role: SignupRole; onBack: () => void }) {
   const isCompany = role === "company";
-  const fields = isCompany ? companyFields : engineerFields;
+  const [message, setMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const nextHash = isCompany ? "#recruiter-project-input" : "#freelancer-register";
+  const userRole: UserRole = isCompany ? "recruiter" : "candidate";
+
+  const startGoogleSignup = async () => {
+    setMessage("");
+
+    if (!firebaseApp || !firebaseDb || !isFirebaseConfigured) {
+      setMessage("Firebase 설정이 없어 Google 가입을 실행할 수 없습니다.");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const auth = getAuth(firebaseApp);
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const userRef = doc(firebaseDb, "users", result.user.uid);
+      const userSnapshot = await getDoc(userRef);
+      await setDoc(
+        userRef,
+        {
+          id: result.user.uid,
+          name: result.user.displayName ?? "",
+          email: result.user.email ?? "",
+          role: userRole,
+          updatedAt: serverTimestamp(),
+          ...(userSnapshot.exists() ? {} : { createdAt: serverTimestamp() }),
+        },
+        { merge: true },
+      );
+      window.location.hash = nextHash;
+    } catch {
+      setMessage("Google 가입 정보 저장이 완료되지 않았습니다. 다시 시도해 주세요.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <>
@@ -515,47 +624,49 @@ function SignupForm({ role, onBack }: { role: SignupRole; onBack: () => void }) 
       <div style={styles.panelHeader}>
         <p style={styles.panelEyebrow}>{isCompany ? "COMPANY SIGNUP" : "AI ENGINEER SIGNUP"}</p>
         <h2 id="signup-title" style={styles.panelTitle}>
-          {isCompany ? "기업 회원가입" : "AI 엔지니어 회원가입"}
+          {isCompany ? "기업 회원 Google 가입" : "AI 엔지니어 회원 Google 가입"}
         </h2>
         <p style={styles.panelDescription}>
           {isCompany
-            ? "프로젝트 매칭을 위해 기업과 담당자 정보를 입력해 주세요."
-            : "검증과 매칭을 위해 기술 역량과 프로젝트 경험을 입력해 주세요."}
+            ? "기업 계정으로 가입하면 프로젝트 입력 화면으로 이동합니다."
+            : "AI 엔지니어 계정으로 가입하면 프리랜서 등록 화면으로 이동합니다."}
         </p>
       </div>
 
-      <form style={styles.form}>
-        {fields.map((field) => (
-          <label key={field.label} style={styles.field}>
-            <span style={styles.fieldLabel}>{field.label}</span>
-            <input style={styles.input} placeholder={field.placeholder} />
-          </label>
-        ))}
-
-        <label style={styles.field}>
-          <span style={styles.fieldLabel}>{isCompany ? "요청사항" : "자기소개"}</span>
-          <textarea
-            style={styles.textarea}
-            placeholder={isCompany ? "필요한 역할, 기간, 예산 등을 적어주세요." : "강점, 선호 업무, 가능한 투입 시점을 적어주세요."}
-          />
-        </label>
-
-        <button type="button" style={styles.primaryButton}>
-          {isCompany ? "기업 회원가입 완료" : "AI 엔지니어 회원가입 완료"}
+      <div style={styles.googleSignupBox}>
+        <span style={styles.googleRoleBadge}>{isCompany ? "기업 회원" : "AI 엔지니어 회원"}</span>
+        <p style={styles.googleSignupText}>Google 계정으로 빠르게 가입하고 다음 단계로 이동하세요.</p>
+        <button type="button" style={styles.googleButton} onClick={startGoogleSignup} disabled={isLoading}>
+          <span style={styles.googleMark}>G</span>
+          {isLoading ? "Google 가입 진행 중" : "Google 계정으로 가입하기"}
         </button>
-      </form>
+        {message ? <p style={styles.errorMessage}>{message}</p> : null}
+      </div>
 
       <p style={styles.notice}>
-        계속 진행하면 Blogle2의 <a href="#terms" style={styles.link}>이용약관</a> 및 <a href="#privacy" style={styles.link}>개인정보 처리방침</a>에 동의하게 됩니다.
+        계속 진행하면 결브릿지의 <a href="#terms" style={styles.link}>이용약관</a> 및 <a href="#privacy" style={styles.link}>개인정보 처리방침</a>에 동의하게 됩니다.
       </p>
     </>
   );
 }
 
-function RecruiterProjectInputPage() {
+function RecruiterProjectInputPage({ initialView = "project" }: { initialView?: RecruiterView }) {
   const [projectForm, setProjectForm] = useState<ProjectForm>(initialProjectForm);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const userEmail = "recruiter@gmail.com";
+  const [activeView, setActiveView] = useState<RecruiterView>(initialView);
+  const [userEmail, setUserEmail] = useState("로그인 계정 확인 중");
+
+  useEffect(() => {
+    if (!firebaseApp) {
+      setUserEmail("Firebase 설정 필요");
+      return undefined;
+    }
+
+    const auth = getAuth(firebaseApp);
+    return onAuthStateChanged(auth, (user) => {
+      setUserEmail(user?.email ?? "로그인 정보 없음");
+    });
+  }, []);
 
   const isProjectReady = useMemo(
     () =>
@@ -588,9 +699,14 @@ function RecruiterProjectInputPage() {
         form={projectForm}
         isReady={isProjectReady}
         isSubmitted={isSubmitted}
+        activeView={activeView}
         userEmail={userEmail}
         onChange={updateProjectForm}
-        onSubmit={() => setIsSubmitted(true)}
+        onSubmit={() => {
+          setIsSubmitted(true);
+          setActiveView("matched");
+        }}
+        onNavigate={setActiveView}
       />
     </main>
   );
@@ -600,16 +716,20 @@ function RecruiterProjectInput({
   form,
   isReady,
   isSubmitted,
+  activeView,
   userEmail,
   onChange,
   onSubmit,
+  onNavigate,
 }: {
   form: ProjectForm;
   isReady: boolean;
   isSubmitted: boolean;
+  activeView: RecruiterView;
   userEmail: string;
   onChange: (field: keyof ProjectForm, value: string) => void;
   onSubmit: () => void;
+  onNavigate: (view: RecruiterView) => void;
 }) {
   return (
     <section className="mx-auto grid w-[min(1200px,calc(100%-32px))] flex-1 gap-5 py-8 lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -619,64 +739,442 @@ function RecruiterProjectInput({
             <BriefcaseBusiness className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <p className="m-0 text-sm font-black">7번 회사</p>
+            <p className="m-0 text-sm font-black">기업 회원 채용 담당자</p>
             <p className="m-0 truncate text-xs text-[#64706c]">{userEmail}</p>
           </div>
         </div>
         <p className="mb-3 mt-0 text-xs font-extrabold tracking-[0.08em] text-[#8b9691]">SECTION 3</p>
         <nav className="grid gap-2">
-          {projectSidebarItems.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              className={
-                item.active
-                  ? "flex h-11 cursor-pointer items-center rounded-md border border-[#b91c1c] bg-[#fff8f8] px-4 text-left text-sm font-black text-[#b91c1c]"
-                  : "flex h-11 cursor-pointer items-center rounded-md border border-transparent bg-white px-4 text-left text-sm font-bold text-[#53615c] hover:bg-[#f8faf9]"
-              }
-            >
-              {item.label}
-            </button>
-          ))}
+          {projectSidebarItems.map((item) => {
+            const isActive = activeView === item.id;
+            return (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => {
+                  if (item.id === "warranty") {
+                    window.location.hash = "#company-support";
+                  } else {
+                    window.history.replaceState(null, "", "#recruiter-project-input");
+                  }
+
+                  onNavigate(item.id);
+                }}
+                className={
+                  isActive
+                    ? "flex h-11 cursor-pointer items-center rounded-md border border-[#b91c1c] bg-[#fff8f8] px-4 text-left text-sm font-black text-[#b91c1c]"
+                    : "flex h-11 cursor-pointer items-center rounded-md border border-transparent bg-white px-4 text-left text-sm font-bold text-[#53615c] hover:bg-[#f8faf9]"
+                }
+              >
+                {item.label}
+              </button>
+            );
+          })}
         </nav>
       </aside>
 
       <div className="min-w-0">
-        <div className="mb-5 rounded-lg border border-[#dde5e0] bg-white p-5">
-          <Badge className="mb-4 bg-[#fee2e2] text-[#b91c1c]">인재 매칭</Badge>
-          <h1 className="m-0 text-2xl font-black leading-tight tracking-normal md:text-3xl">AI 웹 개발자 인력 등록 폼</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-[#53615c]">기업이 원하는 인재를 찾기 위해 프로젝트, 예산, 기간, 필요 인력 정보를 입력합니다.</p>
-        </div>
+        {activeView === "project" ? (
+          <ProjectInputView form={form} isReady={isReady} onChange={onChange} onSubmit={onSubmit} />
+        ) : null}
+        {activeView === "matched" ? (
+          <MatchedTalentView form={form} isSubmitted={isSubmitted} onBack={() => onNavigate("project")} />
+        ) : null}
+        {activeView === "warranty" ? <RecruiterWarrantyView /> : null}
+      </div>
+    </section>
+  );
+}
 
+function ProjectInputView({
+  form,
+  isReady,
+  onChange,
+  onSubmit,
+}: {
+  form: ProjectForm;
+  isReady: boolean;
+  onChange: (field: keyof ProjectForm, value: string) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <>
+      <div className="mb-5 rounded-lg border border-[#dde5e0] bg-white p-5">
+        <Badge className="mb-4 bg-[#fee2e2] text-[#b91c1c]">프로젝트 입력</Badge>
+        <h1 className="m-0 text-2xl font-black leading-tight tracking-normal md:text-3xl">AI 엔지니어 매칭 요청</h1>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-[#53615c]">필요한 프로젝트 조건과 인재 요건을 입력하면 적합한 AI 엔지니어를 찾을 수 있습니다.</p>
+      </div>
+
+      <Card className="rounded-lg border-[#dde5e0] shadow-sm">
+        <CardContent className="grid gap-6 p-5 md:p-7">
+          <div className="grid gap-5 md:grid-cols-2">
+            <TextField label="제목/메뉴" value={form.title} placeholder="예: B2B SaaS AI 챗봇 MVP 개발" onChange={(value) => onChange("title", value)} />
+            <SelectField label="프로젝트 유형" value={form.projectType} options={projectTypeOptions} onChange={(value) => onChange("projectType", value)} />
+            <SelectField label="프로젝트 예산" value={form.budgetRange} options={budgetOptions} onChange={(value) => onChange("budgetRange", value)} />
+            <SelectField label="프로젝트 예상 기간" value={form.duration} options={durationOptions} onChange={(value) => onChange("duration", value)} />
+            <SelectField label="필요 인력 수" value={form.requiredHeadcount} options={headcountOptions} onChange={(value) => onChange("requiredHeadcount", value)} />
+            <SelectField label="프로젝트 시작 시기" value={form.startDate} options={startDateOptions} onChange={(value) => onChange("startDate", value)} />
+            <TextField label="필요 기술" value={form.requiredSkills} placeholder="예: React, Firebase, OpenAI API" onChange={(value) => onChange("requiredSkills", value)} />
+            <SelectField label="협업 방식" value={form.workMode} options={workModeOptions} onChange={(value) => onChange("workMode", value)} />
+          </div>
+
+          <TextAreaField label="구현 하고자 하는 기능" value={form.implementationScope} placeholder="필요 기능, 현재 상황, 원하는 결과물을 구체적으로 적어주세요." onChange={(value) => onChange("implementationScope", value)} />
+          <TextAreaField label="매칭 요청 내용" value={form.matchingRequest} placeholder="선호 경험, 투입 일정, 커뮤니케이션 방식 등 인재 조건을 적어주세요." onChange={(value) => onChange("matchingRequest", value)} />
+
+          <div className="grid gap-4 border-t border-[#e8ece9] pt-5 lg:grid-cols-[1fr_auto] lg:items-center">
+            <FormStatus form={form} />
+            <button type="button" disabled={!isReady} onClick={onSubmit} className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-md border-0 bg-[#b91c1c] px-5 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:bg-[#d8a0a0]">
+              조건 저장 후 인재 찾기
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+function RecruiterWarrantyView() {
+  const remainingWarranty = warrantyUsage.total - warrantyUsage.used;
+  const warrantyProgress = useMemo(() => {
+    const start = new Date(warrantyPeriod.startedAt).getTime();
+    const end = new Date(warrantyPeriod.endsAt).getTime();
+    const ratio = Math.min(1, Math.max(0, (Date.now() - start) / (end - start)));
+    return Math.round(ratio * 100);
+  }, []);
+  const remainingDays = useMemo(() => {
+    const end = new Date(warrantyPeriod.endsAt).getTime();
+    return Math.max(0, Math.ceil((end - Date.now()) / (1000 * 60 * 60 * 24)));
+  }, []);
+
+  return (
+    <>
+      <div className="mb-5 rounded-lg border border-[#dde5e0] bg-white p-5">
+        <Badge className="mb-4 bg-[#fee2e2] text-[#b91c1c]">보증 현황</Badge>
+        <h1 className="m-0 text-2xl font-black leading-tight tracking-normal md:text-3xl">매칭 이후 보증 관리</h1>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-[#53615c]">채용 이후 보증 지원 현황과 이슈 발생 시 대응 절차를 확인합니다.</p>
+      </div>
+
+      <div className="mb-6 grid gap-4 md:grid-cols-3">
         <Card className="rounded-lg border-[#dde5e0] shadow-sm">
-          <CardContent className="grid gap-6 p-5 md:p-7">
-            <div className="grid gap-5 md:grid-cols-2">
-              <TextField label="제목/메뉴" value={form.title} placeholder="예: B2B SaaS AI 챗봇 MVP 개발" onChange={(value) => onChange("title", value)} />
-              <SelectField label="프로젝트 유형" value={form.projectType} options={projectTypeOptions} onChange={(value) => onChange("projectType", value)} />
-              <SelectField label="프로젝트 예산" value={form.budgetRange} options={budgetOptions} onChange={(value) => onChange("budgetRange", value)} />
-              <SelectField label="프로젝트 예상 기간" value={form.duration} options={durationOptions} onChange={(value) => onChange("duration", value)} />
-              <SelectField label="필요 인력 수" value={form.requiredHeadcount} options={headcountOptions} onChange={(value) => onChange("requiredHeadcount", value)} />
-              <SelectField label="프로젝트 시작 시기" value={form.startDate} options={startDateOptions} onChange={(value) => onChange("startDate", value)} />
-              <TextField label="필요 기술" value={form.requiredSkills} placeholder="예: React, Firebase, OpenAI API" onChange={(value) => onChange("requiredSkills", value)} />
-              <SelectField label="협업 방식" value={form.workMode} options={workModeOptions} onChange={(value) => onChange("workMode", value)} />
-            </div>
-
-            <TextAreaField label="구현 하고자 하는 기능" value={form.implementationScope} placeholder="필요 기능, 현재 상황, 원하는 결과물을 구체적으로 적어주세요." onChange={(value) => onChange("implementationScope", value)} />
-            <TextAreaField label="매칭 요청 내용" value={form.matchingRequest} placeholder="선호 경험, 투입 일정, 커뮤니케이션 방식 등 인재 조건을 적어주세요." onChange={(value) => onChange("matchingRequest", value)} />
-
-            <div className="grid gap-4 border-t border-[#e8ece9] pt-5 lg:grid-cols-[1fr_auto] lg:items-center">
-              <FormStatus form={form} />
-              <button type="button" disabled={!isReady} onClick={onSubmit} className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-md border-0 bg-[#b91c1c] px-5 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:bg-[#d8a0a0]">
-                조건 저장 후 인재 찾기
-                <ArrowRight className="h-4 w-4" />
-              </button>
+          <CardContent className="p-5">
+            <p className="m-0 text-sm font-extrabold text-[#64706c]">잔여 보증 횟수</p>
+            <p className="mb-0 mt-3 text-3xl font-black text-[#17221f]">{remainingWarranty}<span className="ml-1 text-base text-[#64706c]">회</span></p>
+            <p className="mt-2 text-xs text-[#64706c]">총 {warrantyUsage.total}회 중 {warrantyUsage.used}회 사용</p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-lg border-[#dde5e0] shadow-sm">
+          <CardContent className="p-5">
+            <p className="m-0 text-sm font-extrabold text-[#64706c]">보증 기간</p>
+            <p className="mb-0 mt-3 text-2xl font-black text-[#17221f]">{remainingDays}일</p>
+            <p className="mt-2 text-xs text-[#64706c]">{warrantyPeriod.endsAt}까지</p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-lg border-[#dde5e0] shadow-sm">
+          <CardContent className="p-5">
+            <p className="m-0 text-sm font-extrabold text-[#64706c]">기간 경과율</p>
+            <p className="mb-0 mt-3 text-2xl font-black text-[#17221f]">{warrantyProgress}%</p>
+            <div className="mt-3 h-2 rounded-full bg-[#f3f4f6]">
+              <div className="h-full rounded-full bg-[#b91c1c]" style={{ width: `${warrantyProgress}%` }} />
             </div>
           </CardContent>
         </Card>
-
-        {isSubmitted ? <RecommendedDevelopers /> : null}
       </div>
-    </section>
+
+      <Card className="mb-6 rounded-lg border-[#dde5e0] shadow-sm">
+        <CardContent className="p-5 md:p-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="m-0 text-xl font-black tracking-normal">보증 항목</h2>
+            <Badge className="bg-[#f1f5f9] text-[#42534c]">총 {warrantyItems.length}개</Badge>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-[#e8ece9] bg-[#fbfcfb] text-left text-xs font-black text-[#64706c]">
+                  <th className="p-3">구분</th>
+                  <th className="p-3">보장 항목</th>
+                  <th className="p-3">상태</th>
+                  <th className="p-3">비고</th>
+                </tr>
+              </thead>
+              <tbody>
+                {warrantyItems.map((item) => (
+                  <tr key={item.id} className="border-b border-[#f0f2f1]">
+                    <td className="p-3 font-extrabold text-[#17221f]">{item.category}</td>
+                    <td className="p-3 text-[#53615c]">{item.coverage}</td>
+                    <td className="p-3"><StatusDot level={item.status} label={item.statusLabel} /></td>
+                    <td className="p-3 text-[#53615c]">{item.note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+        <Card className="rounded-lg border-[#dde5e0] shadow-sm">
+          <CardContent className="p-5 md:p-6">
+            <h2 className="m-0 text-xl font-black tracking-normal">이슈 발생 시 대응 절차</h2>
+            <ol className="mt-5 grid gap-4 p-0">
+              {recruiterWarrantySteps.map((step, index) => (
+                <li key={step.title} className="flex gap-3">
+                  <span className="grid h-8 w-8 flex-none place-items-center rounded-full bg-[#fee2e2] text-sm font-black text-[#b91c1c]">{index + 1}</span>
+                  <div>
+                    <strong className="text-sm text-[#17221f]">{step.title}</strong>
+                    <p className="mb-0 mt-1 text-sm leading-6 text-[#53615c]">{step.description}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-lg border-[#dde5e0] shadow-sm">
+          <CardContent className="p-5 md:p-6">
+            <h2 className="m-0 text-xl font-black tracking-normal">이슈 이력</h2>
+            <div className="mt-5 grid gap-3">
+              {issueHistory.map((entry) => (
+                <div key={entry.id} className="grid gap-2 rounded-md border border-[#e8ece9] bg-[#fbfcfb] p-4 md:grid-cols-[96px_1fr_auto] md:items-center">
+                  <span className="text-xs font-extrabold text-[#8b9691]">{entry.date}</span>
+                  <div>
+                    <p className="m-0 text-sm font-black text-[#17221f]">{entry.issue}</p>
+                    <p className="mb-0 mt-1 text-xs text-[#64706c]">{entry.action}</p>
+                  </div>
+                  <StatusDot level={entry.status} label={entry.statusLabel} />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </>
+  );
+}
+
+function MatchedTalentView({
+  form,
+  isSubmitted,
+  onBack,
+}: {
+  form: ProjectForm;
+  isSubmitted: boolean;
+  onBack: () => void;
+}) {
+  const [requestedDeveloper, setRequestedDeveloper] = useState<string | null>(null);
+  const [wishlist, setWishlist] = useState<string[]>([]);
+  const [matchingStage, setMatchingStage] = useState<MatchingStage>("selecting");
+  const [selectedInterviewTime, setSelectedInterviewTime] = useState<string | null>(null);
+  const toggleWishlist = (name: string) => {
+    setWishlist((current) => (current.includes(name) ? current.filter((item) => item !== name) : [...current, name]));
+  };
+  const requestMatching = (name: string) => {
+    setRequestedDeveloper(name);
+    setMatchingStage("requested");
+    setSelectedInterviewTime(null);
+  };
+
+  if (!isSubmitted) {
+    return (
+      <Card className="rounded-lg border-[#dde5e0] shadow-sm">
+        <CardContent className="grid gap-4 p-7">
+          <Badge className="w-fit bg-[#fee2e2] text-[#b91c1c]">매칭된 인재</Badge>
+          <h1 className="m-0 text-2xl font-black tracking-normal">아직 저장된 매칭 조건이 없습니다</h1>
+          <p className="m-0 text-sm leading-6 text-[#53615c]">프로젝트 조건을 먼저 입력하면 적합한 AI 엔지니어 후보를 확인할 수 있습니다.</p>
+          <button type="button" onClick={onBack} className="mt-2 inline-flex h-11 w-fit cursor-pointer items-center justify-center rounded-md border-0 bg-[#b91c1c] px-4 text-sm font-extrabold text-white">
+            프로젝트 입력하기
+          </button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <div className="mb-5 rounded-lg border border-[#dde5e0] bg-white p-5">
+        <Badge className="mb-4 bg-[#fee2e2] text-[#b91c1c]">매칭된 인재</Badge>
+        <h1 className="m-0 text-2xl font-black leading-tight tracking-normal md:text-3xl">조건에 맞는 AI 엔지니어 후보</h1>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-[#53615c]">입력한 프로젝트 조건을 기준으로 검증된 후보를 비교하고 매칭을 신청할 수 있습니다.</p>
+      </div>
+
+      <Card className="mb-6 rounded-lg border-[#dde5e0] shadow-sm">
+        <CardContent className="grid gap-4 p-5 md:grid-cols-4 md:p-6">
+          <SummaryItem label="프로젝트" value={form.title || "미입력"} />
+          <SummaryItem label="유형" value={form.projectType} />
+          <SummaryItem label="예산" value={form.budgetRange} />
+          <SummaryItem label="기간" value={form.duration} />
+        </CardContent>
+      </Card>
+
+      <div className="mb-6 grid gap-3 rounded-lg border border-[#dde5e0] bg-white p-5 md:grid-cols-4">
+        <MatchingStep label="1" title="매칭 신청" active={matchingStage !== "selecting"} />
+        <MatchingStep label="2" title="엔지니어 수락" active={["accepted", "scheduling", "confirmed", "completed"].includes(matchingStage)} />
+        <MatchingStep label="3" title="일정 조율" active={["scheduling", "confirmed", "completed"].includes(matchingStage)} />
+        <MatchingStep label="4" title="인터뷰 확정" active={["confirmed", "completed"].includes(matchingStage)} />
+      </div>
+
+      {requestedDeveloper ? (
+        <MatchingProgressPanel
+          developerName={requestedDeveloper}
+          stage={matchingStage}
+          selectedInterviewTime={selectedInterviewTime}
+          onAccept={() => setMatchingStage("accepted")}
+          onStartScheduling={() => setMatchingStage("scheduling")}
+          onSelectTime={setSelectedInterviewTime}
+          onConfirmInterview={() => setMatchingStage("confirmed")}
+          onComplete={() => setMatchingStage("completed")}
+          onFail={() => setMatchingStage("failed")}
+          onFindAgain={() => {
+            setRequestedDeveloper(null);
+            setMatchingStage("selecting");
+            setSelectedInterviewTime(null);
+          }}
+        />
+      ) : null}
+
+      <RecommendedDevelopers
+        requestedDeveloper={requestedDeveloper}
+        wishlist={wishlist}
+        onRequest={requestMatching}
+        onToggleWishlist={toggleWishlist}
+      />
+    </>
+  );
+}
+
+function MatchingStep({ label, title, active = false }: { label: string; title: string; active?: boolean }) {
+  return (
+    <div className={active ? "flex items-center gap-3 rounded-md border border-[#fecaca] bg-[#fff7f7] p-3" : "flex items-center gap-3 rounded-md border border-[#e8ece9] bg-[#fbfcfb] p-3"}>
+      <span className={active ? "grid h-7 w-7 place-items-center rounded-full bg-[#b91c1c] text-xs font-black text-white" : "grid h-7 w-7 place-items-center rounded-full bg-[#e8ece9] text-xs font-black text-[#64706c]"}>
+        {label}
+      </span>
+      <span className={active ? "text-sm font-black text-[#b91c1c]" : "text-sm font-extrabold text-[#64706c]"}>{title}</span>
+    </div>
+  );
+}
+
+function MatchingProgressPanel({
+  developerName,
+  stage,
+  selectedInterviewTime,
+  onAccept,
+  onStartScheduling,
+  onSelectTime,
+  onConfirmInterview,
+  onComplete,
+  onFail,
+  onFindAgain,
+}: {
+  developerName: string;
+  stage: MatchingStage;
+  selectedInterviewTime: string | null;
+  onAccept: () => void;
+  onStartScheduling: () => void;
+  onSelectTime: (time: string) => void;
+  onConfirmInterview: () => void;
+  onComplete: () => void;
+  onFail: () => void;
+  onFindAgain: () => void;
+}) {
+  const statusText: Record<MatchingStage, string> = {
+    selecting: "인재 선택 중",
+    requested: "엔지니어 수락 대기",
+    accepted: "엔지니어 수락 완료",
+    scheduling: "인터뷰 일정 조율 중",
+    confirmed: "인터뷰 확정",
+    completed: "매칭 완료",
+    failed: "매칭 불발",
+  };
+
+  return (
+    <Card className="mb-6 rounded-lg border-[#dde5e0] shadow-sm">
+      <CardContent className="grid gap-5 p-5 md:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <Badge className={stage === "failed" ? "mb-3 bg-[#f1f5f9] text-[#42534c]" : "mb-3 bg-[#fee2e2] text-[#b91c1c]"}>{statusText[stage]}</Badge>
+            <h2 className="m-0 text-xl font-black tracking-normal">{developerName} 님과의 매칭 진행</h2>
+            <p className="mt-2 text-sm leading-6 text-[#53615c]">실제 서비스에서는 이 영역이 엔지니어 수락, 쪽지, 인터뷰 일정 합의 기록으로 연결됩니다.</p>
+          </div>
+          {stage === "failed" ? (
+            <button type="button" onClick={onFindAgain} className="inline-flex h-10 cursor-pointer items-center justify-center rounded-md border-0 bg-[#b91c1c] px-4 text-sm font-extrabold text-white">
+              새 인재 찾기
+            </button>
+          ) : null}
+        </div>
+
+        {stage === "requested" ? (
+          <div className="grid gap-3 rounded-md border border-[#e8ece9] bg-[#fbfcfb] p-4">
+            <p className="m-0 text-sm font-bold text-[#42534c]">요청을 보냈습니다. 엔지니어가 수락하면 일정 조율을 시작할 수 있습니다.</p>
+            <button type="button" onClick={onAccept} className="inline-flex h-10 w-fit cursor-pointer items-center justify-center rounded-md border border-[#bbf7d0] bg-[#dcfce7] px-4 text-sm font-extrabold text-[#166534]">
+              엔지니어 수락 처리
+            </button>
+          </div>
+        ) : null}
+
+        {stage === "accepted" ? (
+          <div className="grid gap-3 rounded-md border border-[#e8ece9] bg-[#fbfcfb] p-4">
+            <p className="m-0 text-sm font-bold text-[#42534c]">엔지니어가 매칭 요청을 수락했습니다. 인터뷰 후보 시간을 제안하세요.</p>
+            <button type="button" onClick={onStartScheduling} className="inline-flex h-10 w-fit cursor-pointer items-center justify-center rounded-md border-0 bg-[#b91c1c] px-4 text-sm font-extrabold text-white">
+              일정 조율 시작
+            </button>
+          </div>
+        ) : null}
+
+        {stage === "scheduling" ? (
+          <div className="grid gap-4 rounded-md border border-[#e8ece9] bg-[#fbfcfb] p-4">
+            <p className="m-0 text-sm font-bold text-[#42534c]">양쪽이 가능한 시간을 고르는 단계입니다. 현재는 기업이 후보 시간을 선택하는 데모입니다.</p>
+            <div className="flex flex-wrap gap-2">
+              {interviewTimeOptions.map((time) => (
+                <button
+                  key={time}
+                  type="button"
+                  onClick={() => onSelectTime(time)}
+                  className={
+                    selectedInterviewTime === time
+                      ? "inline-flex h-10 cursor-pointer items-center justify-center rounded-md border border-[#fecaca] bg-[#fff7f7] px-4 text-sm font-extrabold text-[#b91c1c]"
+                      : "inline-flex h-10 cursor-pointer items-center justify-center rounded-md border border-[#dce4df] bg-white px-4 text-sm font-bold text-[#42534c]"
+                  }
+                >
+                  {time}
+                </button>
+              ))}
+            </div>
+            <button type="button" disabled={!selectedInterviewTime} onClick={onConfirmInterview} className="inline-flex h-10 w-fit cursor-pointer items-center justify-center rounded-md border-0 bg-[#b91c1c] px-4 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:bg-[#d8a0a0]">
+              선택한 시간으로 인터뷰 확정
+            </button>
+          </div>
+        ) : null}
+
+        {stage === "confirmed" ? (
+          <div className="grid gap-3 rounded-md border border-[#bbf7d0] bg-[#f0fdf4] p-4">
+            <p className="m-0 text-sm font-black text-[#166534]">인터뷰 일정 확정: {selectedInterviewTime}</p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={onComplete} className="inline-flex h-10 cursor-pointer items-center justify-center rounded-md border-0 bg-[#b91c1c] px-4 text-sm font-extrabold text-white">
+                매칭 완료
+              </button>
+              <button type="button" onClick={onFail} className="inline-flex h-10 cursor-pointer items-center justify-center rounded-md border border-[#dce4df] bg-white px-4 text-sm font-extrabold text-[#42534c]">
+                매칭 불발
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {stage === "completed" ? (
+          <div className="rounded-md border border-[#bbf7d0] bg-[#f0fdf4] p-4">
+            <p className="m-0 text-sm font-black text-[#166534]">매칭이 완료되었습니다. 이후 보증 현황에서 진행 상태를 관리할 수 있습니다.</p>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SummaryItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1">
+      <span className="text-xs font-extrabold text-[#8b9691]">{label}</span>
+      <span className="truncate text-sm font-black text-[#17221f]">{value}</span>
+    </div>
   );
 }
 
@@ -690,34 +1188,147 @@ function FormStatus({ form }: { form: ProjectForm }) {
   );
 }
 
-function RecommendedDevelopers() {
+function RecommendedDevelopers({
+  requestedDeveloper,
+  wishlist,
+  onRequest,
+  onToggleWishlist,
+}: {
+  requestedDeveloper: string | null;
+  wishlist: string[];
+  onRequest: (name: string) => void;
+  onToggleWishlist: (name: string) => void;
+}) {
+  const [selectedDeveloper, setSelectedDeveloper] = useState<(typeof recommendedDevelopers)[number] | null>(null);
+
   return (
-    <section className="mt-6">
+    <section>
       <div className="mb-4 flex items-center justify-between gap-4">
-        <h2 className="m-0 text-xl font-black tracking-normal">추천 개발자</h2>
-        <Badge className="bg-[#f1f5f9] text-[#42534c]">상위 3명</Badge>
+        <h2 className="m-0 text-xl font-black tracking-normal">매칭된 인재</h2>
+        <Badge className="bg-[#f1f5f9] text-[#42534c]">추천 3명</Badge>
       </div>
+      {requestedDeveloper ? (
+        <div className="mb-4 rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] p-4">
+          <p className="m-0 text-sm font-black text-[#166534]">매칭 요청 보냄</p>
+          <p className="mb-0 mt-1 text-xs leading-5 text-[#3f6b4f]">{requestedDeveloper} 님의 수락을 기다리는 중입니다. 수락 후 쪽지와 일정 조율 단계로 이어집니다.</p>
+        </div>
+      ) : null}
       <div className="grid gap-4 md:grid-cols-3">
         {recommendedDevelopers.map((developer) => (
           <Card key={developer.name} className="rounded-lg border-[#dde5e0]">
             <CardContent className="p-5">
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
-                  <p className="m-0 text-base font-black">{developer.name}</p>
+                  <button type="button" onClick={() => setSelectedDeveloper(developer)} className="m-0 cursor-pointer border-0 bg-transparent p-0 text-left text-base font-black text-[#17221f] underline-offset-4 hover:text-[#b91c1c] hover:underline">
+                    {developer.name}
+                  </button>
                   <p className="mt-1 text-sm text-[#64706c]">{developer.title}</p>
                 </div>
                 <span className="rounded-md bg-[#fee2e2] px-2.5 py-1 text-sm font-black text-[#b91c1c]">{developer.score}</span>
               </div>
               <p className="min-h-12 text-sm leading-6 text-[#53615c]">{developer.meta}</p>
-              <button type="button" className="mt-4 inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md border-0 bg-[#b91c1c] px-4 text-sm font-extrabold text-white">
-                매칭 신청
-                <CalendarDays className="h-4 w-4" />
+              <button type="button" onClick={() => setSelectedDeveloper(developer)} className="mt-3 inline-flex h-9 w-full cursor-pointer items-center justify-center rounded-md border border-[#dce4df] bg-white px-3 text-sm font-extrabold text-[#42534c]">
+                상세 정보 보기
+              </button>
+              <button
+                type="button"
+                onClick={() => onToggleWishlist(developer.name)}
+                className={
+                  wishlist.includes(developer.name)
+                    ? "mt-3 inline-flex h-9 w-full cursor-pointer items-center justify-center rounded-md border border-[#fecaca] bg-[#fff7f7] px-3 text-sm font-extrabold text-[#b91c1c]"
+                    : "mt-3 inline-flex h-9 w-full cursor-pointer items-center justify-center rounded-md border border-[#dce4df] bg-white px-3 text-sm font-extrabold text-[#42534c]"
+                }
+              >
+                {wishlist.includes(developer.name) ? "위시리스트 저장됨" : "위시리스트 저장"}
+              </button>
+              <button
+                type="button"
+                onClick={() => onRequest(developer.name)}
+                className={
+                  requestedDeveloper === developer.name
+                    ? "mt-4 inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-[#bbf7d0] bg-[#dcfce7] px-4 text-sm font-extrabold text-[#166534]"
+                    : "mt-4 inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md border-0 bg-[#b91c1c] px-4 text-sm font-extrabold text-white"
+                }
+              >
+                {requestedDeveloper === developer.name ? "엔지니어 수락 대기" : "매칭 신청"}
               </button>
             </CardContent>
           </Card>
         ))}
       </div>
+      {selectedDeveloper ? (
+        <DeveloperDetailModal
+          developer={selectedDeveloper}
+          isRequested={requestedDeveloper === selectedDeveloper.name}
+          isWishlisted={wishlist.includes(selectedDeveloper.name)}
+          onRequest={() => onRequest(selectedDeveloper.name)}
+          onToggleWishlist={() => onToggleWishlist(selectedDeveloper.name)}
+          onClose={() => setSelectedDeveloper(null)}
+        />
+      ) : null}
     </section>
+  );
+}
+
+function DeveloperDetailModal({
+  developer,
+  isRequested,
+  isWishlisted,
+  onRequest,
+  onToggleWishlist,
+  onClose,
+}: {
+  developer: (typeof recommendedDevelopers)[number];
+  isRequested: boolean;
+  isWishlisted: boolean;
+  onRequest: () => void;
+  onToggleWishlist: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(15,23,42,0.55)] p-6" onClick={onClose} role="presentation">
+      <div className="w-[min(520px,100%)] rounded-lg bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="developer-detail-title" onClick={(event) => event.stopPropagation()}>
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <Badge className="mb-3 bg-[#fee2e2] text-[#b91c1c]">매칭 점수 {developer.score}</Badge>
+            <h2 id="developer-detail-title" className="m-0 text-2xl font-black tracking-normal">{developer.name}</h2>
+            <p className="mt-1 text-sm font-bold text-[#64706c]">{developer.title}</p>
+          </div>
+          <button type="button" onClick={onClose} className="grid h-9 w-9 cursor-pointer place-items-center rounded-md border-0 bg-[#f1f5f9] text-xl font-bold text-[#42534c]" aria-label="닫기">
+            ×
+          </button>
+        </div>
+
+        <dl className="grid gap-3 border-y border-[#e8ece9] py-4">
+          <DetailRow label="경력" value={developer.experience} />
+          <DetailRow label="주요 기술" value={developer.meta} />
+          <DetailRow label="투입 가능" value={developer.availability} />
+          <DetailRow label="검증 결과" value={developer.verification} />
+          <DetailRow label="프로젝트 이력" value={developer.projectHistory} />
+        </dl>
+
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button type="button" onClick={onClose} className="inline-flex h-11 cursor-pointer items-center justify-center rounded-md border border-[#dce4df] bg-white px-4 text-sm font-extrabold text-[#42534c]">
+            닫기
+          </button>
+          <button type="button" onClick={onToggleWishlist} className={isWishlisted ? "inline-flex h-11 cursor-pointer items-center justify-center rounded-md border border-[#fecaca] bg-[#fff7f7] px-4 text-sm font-extrabold text-[#b91c1c]" : "inline-flex h-11 cursor-pointer items-center justify-center rounded-md border border-[#dce4df] bg-white px-4 text-sm font-extrabold text-[#42534c]"}>
+            {isWishlisted ? "위시리스트 저장됨" : "위시리스트 저장"}
+          </button>
+          <button type="button" onClick={onRequest} className={isRequested ? "inline-flex h-11 cursor-pointer items-center justify-center rounded-md border border-[#bbf7d0] bg-[#dcfce7] px-4 text-sm font-extrabold text-[#166534]" : "inline-flex h-11 cursor-pointer items-center justify-center rounded-md border-0 bg-[#b91c1c] px-4 text-sm font-extrabold text-white"}>
+            {isRequested ? "엔지니어 수락 대기" : "이 인재 매칭 신청"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1 sm:grid-cols-[92px_minmax(0,1fr)] sm:gap-4">
+      <dt className="text-xs font-extrabold text-[#8b9691]">{label}</dt>
+      <dd className="m-0 text-sm leading-6 text-[#17221f]">{value}</dd>
+    </div>
   );
 }
 
@@ -1373,10 +1984,6 @@ const styles: Record<string, CSSProperties> = {
   eyebrow: { color: "#0f766e", fontWeight: 750, letterSpacing: "0.08em", fontSize: "12px" },
   heading: { margin: "18px 0 20px", fontSize: "48px", lineHeight: 1.2, letterSpacing: 0, fontWeight: 760 },
   lead: { margin: 0, color: "#53615c", fontSize: "18px", lineHeight: 1.7, maxWidth: "550px" },
-  benefits: { display: "grid", gap: "16px", marginTop: "42px" },
-  benefit: { display: "flex", alignItems: "center", gap: "13px" },
-  checkMark: { display: "grid", placeItems: "center", flex: "0 0 auto", width: "22px", height: "22px", borderRadius: "50%", background: "#d1fae5", color: "#0f766e", fontSize: "11px", fontWeight: 750 },
-  benefitText: { color: "#53615c", fontSize: "15px", fontWeight: 650 },
   panel: { background: "#fff", border: "1px solid #dde5e0", borderRadius: "8px", padding: "38px", boxShadow: "0 16px 42px rgba(22, 34, 31, 0.07)" },
   panelHeader: { marginBottom: "28px" },
   panelEyebrow: { margin: "0 0 9px", color: "#0f766e", fontSize: "11px", letterSpacing: "0.08em", fontWeight: 750 },
@@ -1391,12 +1998,12 @@ const styles: Record<string, CSSProperties> = {
   roleDetail: { display: "block", color: "#0f766e", fontSize: "12px", marginTop: "7px", fontWeight: 650 },
   arrow: { flex: "0 0 auto", color: "#0f766e", fontSize: "20px", lineHeight: 1 },
   backButton: { margin: "0 0 22px", padding: 0, border: 0, background: "transparent", color: "#0f766e", fontFamily: "inherit", fontSize: "13px", fontWeight: 750, cursor: "pointer" },
-  form: { display: "grid", gap: "14px" },
-  field: { display: "grid", gap: "7px" },
-  fieldLabel: { color: "#42534c", fontSize: "13px", fontWeight: 750 },
-  input: { height: "46px", border: "1px solid #dce4df", borderRadius: "7px", padding: "0 14px", color: "#17221f", fontFamily: "inherit", fontSize: "14px", outlineColor: "#0f766e", background: "#fbfcfb" },
-  textarea: { minHeight: "92px", border: "1px solid #dce4df", borderRadius: "7px", padding: "13px 14px", color: "#17221f", fontFamily: "inherit", fontSize: "14px", lineHeight: 1.5, resize: "vertical", outlineColor: "#0f766e", background: "#fbfcfb" },
-  primaryButton: { width: "100%", height: "48px", marginTop: "6px", border: 0, borderRadius: "7px", background: "#0f766e", color: "#fff", fontFamily: "inherit", fontSize: "15px", fontWeight: 750, cursor: "pointer" },
+  googleSignupBox: { display: "grid", gap: "16px", border: "1px solid #e8ece9", borderRadius: "8px", background: "#fbfcfb", padding: "22px" },
+  googleRoleBadge: { justifySelf: "start", borderRadius: "999px", background: "#fee2e2", color: "#b91c1c", padding: "6px 10px", fontSize: "12px", fontWeight: 800 },
+  googleSignupText: { margin: 0, color: "#53615c", fontSize: "14px", lineHeight: 1.6 },
+  googleButton: { width: "100%", minHeight: "50px", border: "1px solid #dce4df", borderRadius: "7px", background: "#fff", color: "#17221f", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "10px", fontFamily: "inherit", fontSize: "15px", fontWeight: 800, cursor: "pointer" },
+  googleMark: { display: "grid", placeItems: "center", width: "24px", height: "24px", borderRadius: "50%", border: "1px solid #dce4df", color: "#b91c1c", fontSize: "14px", fontWeight: 900 },
+  errorMessage: { margin: 0, color: "#b91c1c", fontSize: "12px", lineHeight: 1.5, fontWeight: 700 },
   loginPrompt: { margin: "25px 0 0", color: "#42534c", fontSize: "14px" },
   loginLink: { color: "#0f766e", fontWeight: 700, textDecoration: "underline", textUnderlineOffset: "3px" },
   notice: { margin: "22px 0 0", paddingTop: "20px", borderTop: "1px solid #e8ece9", color: "#7a8580", fontSize: "12px", lineHeight: 1.6 },

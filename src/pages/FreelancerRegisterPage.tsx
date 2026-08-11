@@ -11,7 +11,7 @@ export function FreelancerRegisterPage() {
               결브릿지 · 기능1
             </span>
             <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-[#172033] max-sm:text-2xl">
-              AI 웹 개발자 인력 등록 폼
+              AI 엔지니어 인력 등록 폼
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#667085]">
               결브릿지에서 기업 매칭에 필요한 검증 정보와 희망 조건을 한 번에 정리합니다.

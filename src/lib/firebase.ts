@@ -1,4 +1,5 @@
 import { initializeApp, type FirebaseApp, type FirebaseOptions } from "firebase/app";
+import { getFirestore, type Firestore } from "firebase/firestore";
 
 const firebaseConfig: FirebaseOptions = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -20,5 +21,7 @@ const hasFirebaseConfig = Boolean(
 export const firebaseApp: FirebaseApp | null = hasFirebaseConfig
   ? initializeApp(firebaseConfig)
   : null;
+
+export const firebaseDb: Firestore | null = firebaseApp ? getFirestore(firebaseApp) : null;
 
 export const isFirebaseConfigured = hasFirebaseConfig;
