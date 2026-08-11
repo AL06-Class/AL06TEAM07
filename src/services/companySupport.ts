@@ -1,4 +1,4 @@
-import { collection, getDocs, getFirestore, limit, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, getFirestore, limit, query, where } from "firebase/firestore";
 import { firebaseApp } from "../lib/firebase";
 
 export type Company = { id: string; name: string };
@@ -43,4 +43,10 @@ export async function getCompanySupport(companyId: string): Promise<{ warranty: 
     referenceCards: asRecordArray(guideDocument.data().referenceCards).map((card) => ({ guideType: asString(card.guideType) as SupportGuideCardType, subtitle: asString(card.subtitle), items: asStringArray(card.items) })).filter((card) => ["hotline", "replacement", "documents", "checklist"].includes(card.guideType)),
   } : null;
   return { warranty, issues, guide };
+}
+
+export async function getCompanyIdForUser(userId: string): Promise<string> {
+  if (!firebaseApp || !userId) return "";
+  const userSnapshot = await getDoc(doc(getFirestore(firebaseApp), "users", userId));
+  return userSnapshot.exists() ? asString(userSnapshot.data().companyId) : "";
 }
