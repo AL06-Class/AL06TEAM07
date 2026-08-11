@@ -86,6 +86,9 @@
 - `interviewQuestions`: 면접 질문
 - `evaluations`: 면접 평가
 - `evaluationCriteria`: 평가 기준
+- `warranties`: 기업별 보증 정보
+- `warrantyIssues`: 기업 보증 이슈 이력
+- `companySupportGuides`: 기업별 지원 절차와 참고 자료
 
 ### 공통 필드 이름
 
@@ -156,6 +159,18 @@
 - `workMode`: 근무 또는 협업 방식
 - `matchingRequest`: 매칭 요청 내용
 
+#### 기업 보증 지원
+
+- `warrantyId`: 보증 정보 식별자
+- `totalCount`: 전체 보증 횟수
+- `usedCount`: 사용한 보증 횟수
+- `reportedAt`: 이슈 접수 날짜
+- `ownerName`: 이슈 담당자 이름
+- `actionTaken`: 이슈 조치 내용
+- `escalationSteps`: 이슈 대응 절차 목록
+- `referenceCards`: 기업별 지원 안내 카드 목록
+- `guideType`: 지원 안내 카드 종류
+
 ### 역할 값
 
 - `candidate`: 지원자
@@ -175,6 +190,7 @@
 - `selected`: 선택됨
 - `completed`: 완료
 - `cancelled`: 취소됨
+- `inProgress`: 처리 중
 
 ## 데이터 모델 초안
 
@@ -323,6 +339,39 @@
 - `createdAt`
 - `updatedAt`
 
+### warranties
+
+- `id`
+- `companyId`
+- `totalCount`
+- `usedCount`
+- `startedAt`
+- `endsAt`
+- `createdAt`
+- `updatedAt`
+
+### warrantyIssues
+
+- `id`
+- `warrantyId`
+- `companyId`
+- `title`
+- `ownerName`
+- `status` (`pending`, `inProgress`, `completed`)
+- `actionTaken`
+- `reportedAt`
+- `createdAt`
+- `updatedAt`
+
+### companySupportGuides
+
+- `id`
+- `companyId`
+- `escalationSteps`
+- `referenceCards`
+- `createdAt`
+- `updatedAt`
+
 ## 최종 결정
 
 - 주요 컬렉션: 공통 이름 사전의 컬렉션 이름을 초안으로 사용
@@ -333,6 +382,9 @@
 - 더미 데이터 기준: 기능 검증에 필요한 최소만 작성
 - DB 연결 기준: 화면 컴포넌트와 데이터 접근 코드를 분리하고 Firebase 연결 코드는 한 곳에서 관리
 - 공통 이름 사전 기준: 새 컬렉션, 필드, 상태값, 역할 값은 구현 전에 이 문서에 먼저 추가
+- 기업 보증 지원: `warranties`, `warrantyIssues` 컬렉션으로 기업별 보증 정보와 이슈 이력을 관리
+- 기업 보증 이슈 상태값: `pending`(대기), `inProgress`(처리 중), `completed`(완료)
+- 기업별 지원 안내: `companySupportGuides`에서 이슈 대응 절차와 참고 자료를 관리
 
 ## 변경 이력
 
@@ -341,3 +393,5 @@
 - 2026-05-29: 기본 데이터 기준을 최종 결정에 반영
 - 2026-05-29: 공통 이름 사전과 데이터 이름 추가 절차 반영
 - 2026-05-29: 일정 조율, 면접 질문 생성, 평가 과업에 필요한 공통 이름 보강
+- 2026-08-07: 기업 보증 정보와 이슈 이력 컬렉션, 이슈 상태값 추가
+- 2026-08-10: 기업별 지원 절차와 참고 자료 데이터 기준 추가
