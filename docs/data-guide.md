@@ -171,6 +171,11 @@
 - `referenceCards`: 기업별 지원 안내 카드 목록
 - `guideType`: 지원 안내 카드 종류
 
+#### 기업 회원 연결
+
+- `companyId`: 기업 회원과 기업 문서를 연결하는 식별자
+- 기업 회원은 가입 시 `companies` 문서를 만들고, 같은 ID를 `users.companyId`에 저장합니다.
+
 ### 역할 값
 
 - `candidate`: 지원자
@@ -202,7 +207,15 @@
 - `name`
 - `email`
 - `role`
+- `companyId`: 기업 회원이 소속된 기업 식별자 (기업 회원만 사용)
 - `title`
+- `createdAt`
+- `updatedAt`
+
+### companies
+
+- `id`
+- `name`
 - `createdAt`
 - `updatedAt`
 

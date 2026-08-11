@@ -17,13 +17,13 @@ import {
   UsersRound,
 } from "lucide-react";
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup } from "firebase/auth";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "./components/ui/badge";
 import { Card, CardContent } from "./components/ui/card";
 import { firebaseApp, firebaseDb, isFirebaseConfigured } from "./lib/firebase";
 import { FreelancerRegisterPage } from "./pages/FreelancerRegisterPage";
-import { getCompanies, getCompanySupport, type Company, type CompanySupportGuide, type SupportGuideCardType, type Warranty, type WarrantyIssue } from "./services/companySupport";
+import { getCompanies, getCompanyIdForUser, getCompanySupport, type Company, type CompanySupportGuide, type SupportGuideCardType, type Warranty, type WarrantyIssue } from "./services/companySupport";
 
 type SignupRole = "company" | "engineer";
 type UserRole = "candidate" | "recruiter";
@@ -577,11 +577,17 @@ function GoogleSignupPanel({ role, onBack }: { role: SignupRole; onBack: () => v
   const isCompany = role === "company";
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [companyName, setCompanyName] = useState("");
   const nextHash = isCompany ? "#recruiter-project-input" : "#freelancer-register";
   const userRole: UserRole = isCompany ? "recruiter" : "candidate";
 
   const startGoogleSignup = async () => {
     setMessage("");
+
+    if (isCompany && !companyName.trim()) {
+      setMessage("회사명을 입력해 주세요.");
+      return;
+    }
 
     if (!firebaseApp || !firebaseDb || !isFirebaseConfigured) {
       setMessage("Firebase 설정이 없어 Google 가입을 실행할 수 없습니다.");
@@ -595,6 +601,16 @@ function GoogleSignupPanel({ role, onBack }: { role: SignupRole; onBack: () => v
       const result = await signInWithPopup(auth, provider);
       const userRef = doc(firebaseDb, "users", result.user.uid);
       const userSnapshot = await getDoc(userRef);
+      const existingCompanyId = userSnapshot.exists() && typeof userSnapshot.data().companyId === "string"
+        ? userSnapshot.data().companyId
+        : "";
+      const companyId = isCompany
+        ? existingCompanyId || (await addDoc(collection(firebaseDb, "companies"), {
+            name: companyName.trim(),
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          })).id
+        : "";
       await setDoc(
         userRef,
         {
@@ -602,6 +618,7 @@ function GoogleSignupPanel({ role, onBack }: { role: SignupRole; onBack: () => v
           name: result.user.displayName ?? "",
           email: result.user.email ?? "",
           role: userRole,
+          ...(companyId ? { companyId } : {}),
           updatedAt: serverTimestamp(),
           ...(userSnapshot.exists() ? {} : { createdAt: serverTimestamp() }),
         },
@@ -635,6 +652,18 @@ function GoogleSignupPanel({ role, onBack }: { role: SignupRole; onBack: () => v
 
       <div style={styles.googleSignupBox}>
         <span style={styles.googleRoleBadge}>{isCompany ? "기업 회원" : "AI 엔지니어 회원"}</span>
+        {isCompany ? (
+          <label style={styles.fieldLabel}>
+            회사명
+            <input
+              type="text"
+              value={companyName}
+              onChange={(event) => setCompanyName(event.target.value)}
+              placeholder="예: 결브릿지"
+              style={styles.textField}
+            />
+          </label>
+        ) : null}
         <p style={styles.googleSignupText}>Google 계정으로 빠르게 가입하고 다음 단계로 이동하세요.</p>
         <button type="button" style={styles.googleButton} onClick={startGoogleSignup} disabled={isLoading}>
           <span style={styles.googleMark}>G</span>
@@ -835,17 +864,74 @@ function ProjectInputView({
 }
 
 function RecruiterWarrantyView() {
-  const remainingWarranty = warrantyUsage.total - warrantyUsage.used;
+  const [warranty, setWarranty] = useState<Warranty | null>(null);
+  const [issues, setIssues] = useState<WarrantyIssue[]>([]);
+  const [guide, setGuide] = useState<CompanySupportGuide | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    if (!firebaseApp) {
+      setLoadError("Firebase 설정이 없어 보증 정보를 불러올 수 없습니다.");
+      setIsLoading(false);
+      return undefined;
+    }
+
+    let isActive = true;
+    const unsubscribe = onAuthStateChanged(getAuth(firebaseApp), async (user) => {
+      if (!user) {
+        if (isActive) {
+          setLoadError("로그인한 기업 회원만 보증 현황을 확인할 수 있습니다.");
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      try {
+        if (isActive) {
+          setIsLoading(true);
+          setLoadError("");
+        }
+        const companyId = await getCompanyIdForUser(user.uid);
+        if (!companyId) {
+          if (isActive) setLoadError("연결된 기업 정보가 없습니다. 가입 정보를 확인해 주세요.");
+          return;
+        }
+        const support = await getCompanySupport(companyId);
+        if (isActive) {
+          setWarranty(support.warranty);
+          setIssues(support.issues);
+          setGuide(support.guide);
+        }
+      } catch {
+        if (isActive) setLoadError("보증 정보를 불러오지 못했습니다. Firestore 설정을 확인해 주세요.");
+      } finally {
+        if (isActive) setIsLoading(false);
+      }
+    });
+
+    return () => {
+      isActive = false;
+      unsubscribe();
+    };
+  }, []);
+
+  const remainingWarranty = Math.max(0, (warranty?.totalCount ?? 0) - (warranty?.usedCount ?? 0));
   const warrantyProgress = useMemo(() => {
-    const start = new Date(warrantyPeriod.startedAt).getTime();
-    const end = new Date(warrantyPeriod.endsAt).getTime();
+    const start = new Date(warranty?.startedAt ?? "").getTime();
+    const end = new Date(warranty?.endsAt ?? "").getTime();
+    if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return 0;
     const ratio = Math.min(1, Math.max(0, (Date.now() - start) / (end - start)));
     return Math.round(ratio * 100);
-  }, []);
+  }, [warranty]);
   const remainingDays = useMemo(() => {
-    const end = new Date(warrantyPeriod.endsAt).getTime();
+    const end = new Date(warranty?.endsAt ?? "").getTime();
+    if (Number.isNaN(end)) return 0;
     return Math.max(0, Math.ceil((end - Date.now()) / (1000 * 60 * 60 * 24)));
-  }, []);
+  }, [warranty]);
+  const hasAttentionItem = issues.some((issue) => issue.status !== "completed");
+  const escalationSteps = guide?.escalationSteps ?? [];
+  const referenceCards = guide?.referenceCards ?? [];
 
   return (
     <>
@@ -855,19 +941,31 @@ function RecruiterWarrantyView() {
         <p className="mt-3 max-w-3xl text-sm leading-6 text-[#53615c]">채용 이후 보증 지원 현황과 이슈 발생 시 대응 절차를 확인합니다.</p>
       </div>
 
+      {isLoading ? <p className="mb-5 rounded-lg border border-[#dde5e0] bg-white p-4 text-sm font-bold text-[#53615c]">보증 정보를 불러오는 중입니다.</p> : null}
+      {loadError ? <p className="mb-5 rounded-lg border border-[#fecaca] bg-[#fff7f7] p-4 text-sm font-bold text-[#b91c1c]">{loadError}</p> : null}
+      {!isLoading && !loadError ? (
+        <div className={hasAttentionItem ? "mb-5 flex items-center gap-3 rounded-lg border border-[#fde68a] bg-[#fffbeb] p-4 text-[#8a6205]" : "mb-5 flex items-center gap-3 rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] p-4 text-[#166534]"}>
+          <CheckCircle2 className="h-5 w-5 flex-none" />
+          <div>
+            <strong className="block text-sm">{hasAttentionItem ? "처리할 이슈가 있습니다" : "처리할 이슈가 없습니다"}</strong>
+            <span className="text-xs font-semibold">담당 PM이 상시 모니터링합니다.</span>
+          </div>
+        </div>
+      ) : null}
+
       <div className="mb-6 grid gap-4 md:grid-cols-3">
         <Card className="rounded-lg border-[#dde5e0] shadow-sm">
           <CardContent className="p-5">
             <p className="m-0 text-sm font-extrabold text-[#64706c]">잔여 보증 횟수</p>
             <p className="mb-0 mt-3 text-3xl font-black text-[#17221f]">{remainingWarranty}<span className="ml-1 text-base text-[#64706c]">회</span></p>
-            <p className="mt-2 text-xs text-[#64706c]">총 {warrantyUsage.total}회 중 {warrantyUsage.used}회 사용</p>
+            <p className="mt-2 text-xs text-[#64706c]">총 {warranty?.totalCount ?? 0}회 중 {warranty?.usedCount ?? 0}회 사용</p>
           </CardContent>
         </Card>
         <Card className="rounded-lg border-[#dde5e0] shadow-sm">
           <CardContent className="p-5">
             <p className="m-0 text-sm font-extrabold text-[#64706c]">보증 기간</p>
             <p className="mb-0 mt-3 text-2xl font-black text-[#17221f]">{remainingDays}일</p>
-            <p className="mt-2 text-xs text-[#64706c]">{warrantyPeriod.endsAt}까지</p>
+            <p className="mt-2 text-xs text-[#64706c]">{warranty ? `${warranty.endsAt}까지` : "등록된 보증 정보가 없습니다"}</p>
           </CardContent>
         </Card>
         <Card className="rounded-lg border-[#dde5e0] shadow-sm">
@@ -885,7 +983,7 @@ function RecruiterWarrantyView() {
         <CardContent className="p-5 md:p-6">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="m-0 text-xl font-black tracking-normal">보증 항목</h2>
-            <Badge className="bg-[#f1f5f9] text-[#42534c]">총 {warrantyItems.length}개</Badge>
+            <Badge className="bg-[#f1f5f9] text-[#42534c]">{warranty ? "총 2개" : "등록 없음"}</Badge>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] border-collapse text-sm">
@@ -898,7 +996,10 @@ function RecruiterWarrantyView() {
                 </tr>
               </thead>
               <tbody>
-                {warrantyItems.map((item) => (
+                {(warranty ? [
+                  { id: "warranty-period", category: "보증 기간", coverage: `${warranty.startedAt} ~ ${warranty.endsAt}`, status: "good" as const, statusLabel: "활성", note: `${remainingDays}일 남음` },
+                  { id: "warranty-count", category: "보증 횟수", coverage: `잔여 ${remainingWarranty}회 / 총 ${warranty.totalCount}회`, status: remainingWarranty > 0 ? "info" as const : "warning" as const, statusLabel: remainingWarranty > 0 ? "사용 가능" : "소진", note: `${warranty.usedCount}회 사용` },
+                ] : []).map((item) => (
                   <tr key={item.id} className="border-b border-[#f0f2f1]">
                     <td className="p-3 font-extrabold text-[#17221f]">{item.category}</td>
                     <td className="p-3 text-[#53615c]">{item.coverage}</td>
@@ -906,6 +1007,7 @@ function RecruiterWarrantyView() {
                     <td className="p-3 text-[#53615c]">{item.note}</td>
                   </tr>
                 ))}
+                {!warranty ? <tr><td colSpan={4} className="p-6 text-center text-sm text-[#64706c]">등록된 보증 정보가 없습니다.</td></tr> : null}
               </tbody>
             </table>
           </div>
@@ -917,7 +1019,7 @@ function RecruiterWarrantyView() {
           <CardContent className="p-5 md:p-6">
             <h2 className="m-0 text-xl font-black tracking-normal">이슈 발생 시 대응 절차</h2>
             <ol className="mt-5 grid gap-4 p-0">
-              {recruiterWarrantySteps.map((step, index) => (
+              {escalationSteps.map((step, index) => (
                 <li key={step.title} className="flex gap-3">
                   <span className="grid h-8 w-8 flex-none place-items-center rounded-full bg-[#fee2e2] text-sm font-black text-[#b91c1c]">{index + 1}</span>
                   <div>
@@ -926,6 +1028,7 @@ function RecruiterWarrantyView() {
                   </div>
                 </li>
               ))}
+              {!escalationSteps.length ? <li className="text-sm text-[#64706c]">등록된 이슈 대응 절차가 없습니다.</li> : null}
             </ol>
           </CardContent>
         </Card>
@@ -934,20 +1037,41 @@ function RecruiterWarrantyView() {
           <CardContent className="p-5 md:p-6">
             <h2 className="m-0 text-xl font-black tracking-normal">이슈 이력</h2>
             <div className="mt-5 grid gap-3">
-              {issueHistory.map((entry) => (
+              {issues.map((entry) => (
                 <div key={entry.id} className="grid gap-2 rounded-md border border-[#e8ece9] bg-[#fbfcfb] p-4 md:grid-cols-[96px_1fr_auto] md:items-center">
-                  <span className="text-xs font-extrabold text-[#8b9691]">{entry.date}</span>
+                  <span className="text-xs font-extrabold text-[#8b9691]">{entry.reportedAt}</span>
                   <div>
-                    <p className="m-0 text-sm font-black text-[#17221f]">{entry.issue}</p>
-                    <p className="mb-0 mt-1 text-xs text-[#64706c]">{entry.action}</p>
+                    <p className="m-0 text-sm font-black text-[#17221f]">{entry.title}</p>
+                    <p className="mb-0 mt-1 text-xs text-[#64706c]">{entry.ownerName} · {entry.actionTaken}</p>
                   </div>
-                  <StatusDot level={entry.status} label={entry.statusLabel} />
+                  <StatusDot level={entry.status === "completed" ? "good" : entry.status === "inProgress" ? "info" : "warning"} label={entry.status === "completed" ? "완료" : entry.status === "inProgress" ? "처리 중" : "대기"} />
                 </div>
               ))}
+              {!issues.length ? <p className="m-0 rounded-md border border-dashed border-[#dce4df] p-4 text-sm text-[#64706c]">등록된 이슈 이력이 없습니다.</p> : null}
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {referenceCards.length ? (
+        <Card className="rounded-lg border-[#dde5e0] shadow-sm">
+          <CardContent className="p-5 md:p-6">
+            <h2 className="m-0 text-xl font-black tracking-normal">참고 자료</h2>
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              {referenceCards.map((card) => {
+                const { icon: Icon, title } = supportCardMetadata[card.guideType];
+                return (
+                  <div key={card.guideType} className="rounded-md border border-[#e8ece9] bg-[#fbfcfb] p-4">
+                    <div className="flex items-center gap-2 text-[#b91c1c]"><Icon className="h-4 w-4" /><strong className="text-sm">{title}</strong></div>
+                    <p className="mb-0 mt-2 text-xs text-[#64706c]">{card.subtitle}</p>
+                    <ul className="mb-0 mt-3 grid gap-1 pl-4 text-xs leading-5 text-[#53615c]">{card.items.map((item) => <li key={item}>{item}</li>)}</ul>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
     </>
   );
 }
@@ -1999,6 +2123,8 @@ const styles: Record<string, CSSProperties> = {
   arrow: { flex: "0 0 auto", color: "#0f766e", fontSize: "20px", lineHeight: 1 },
   backButton: { margin: "0 0 22px", padding: 0, border: 0, background: "transparent", color: "#0f766e", fontFamily: "inherit", fontSize: "13px", fontWeight: 750, cursor: "pointer" },
   googleSignupBox: { display: "grid", gap: "16px", border: "1px solid #e8ece9", borderRadius: "8px", background: "#fbfcfb", padding: "22px" },
+  fieldLabel: { display: "grid", gap: "7px", color: "#42534c", fontSize: "13px", fontWeight: 750 },
+  textField: { width: "100%", boxSizing: "border-box", border: "1px solid #dce4df", borderRadius: "6px", background: "#fff", color: "#17221f", padding: "11px 12px", fontFamily: "inherit", fontSize: "14px" },
   googleRoleBadge: { justifySelf: "start", borderRadius: "999px", background: "#fee2e2", color: "#b91c1c", padding: "6px 10px", fontSize: "12px", fontWeight: 800 },
   googleSignupText: { margin: 0, color: "#53615c", fontSize: "14px", lineHeight: 1.6 },
   googleButton: { width: "100%", minHeight: "50px", border: "1px solid #dce4df", borderRadius: "7px", background: "#fff", color: "#17221f", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "10px", fontFamily: "inherit", fontSize: "15px", fontWeight: 800, cursor: "pointer" },
