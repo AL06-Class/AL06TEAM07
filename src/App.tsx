@@ -26,7 +26,7 @@ import { FreelancerRegisterPage } from "./pages/FreelancerRegisterPage";
 import { getCompanies, getCompanyIdForUser, getCompanySupport, type Company, type CompanySupportGuide, type SupportGuideCardType, type Warranty, type WarrantyIssue } from "./services/companySupport";
 
 type SignupRole = "company" | "engineer";
-type UserRole = "candidate" | "recruiter";
+type UserRole = "candidate" | "recruiter" | "admin";
 type View = "select" | "login" | SignupRole;
 type CandidateStatus = "hired" | "pending";
 type RecruiterView = "project" | "matched" | "warranty";
@@ -292,6 +292,116 @@ const candidates = [
   },
 ];
 
+type AdminQueueKey = "engineers" | "companies" | "matching" | "warranties";
+type AdminStatus = "new" | "reviewing" | "waiting" | "done" | "blocked";
+
+type AdminQueueItem = {
+  id: string;
+  queue: AdminQueueKey;
+  primary: string;
+  secondary: string;
+  owner: string;
+  submittedAt: string;
+  status: AdminStatus;
+  summary: string;
+  details: { label: string; value: string }[];
+  actions: string[];
+};
+
+const adminQueueTabs: { key: AdminQueueKey; label: string; description: string }[] = [
+  { key: "engineers", label: "엔지니어 제출", description: "AI 엔지니어가 제출한 등록 정보" },
+  { key: "companies", label: "기업 요청", description: "기업이 입력한 프로젝트 조건" },
+  { key: "matching", label: "매칭 관리", description: "기업과 엔지니어 연결 상태" },
+  { key: "warranties", label: "보증 요청", description: "매칭 이후 보증 처리 요청" },
+];
+
+const adminStatusMeta: Record<AdminStatus, { label: string; styleKey: "infoBadge" | "warningBadge" | "hiredBadge" | "rejectedBadge" }> = {
+  new: { label: "신규", styleKey: "infoBadge" },
+  reviewing: { label: "검토 중", styleKey: "warningBadge" },
+  waiting: { label: "응답 대기", styleKey: "warningBadge" },
+  done: { label: "처리 완료", styleKey: "hiredBadge" },
+  blocked: { label: "확인 필요", styleKey: "rejectedBadge" },
+};
+
+const adminQueueItems: AdminQueueItem[] = [
+  {
+    id: "engineer-001",
+    queue: "engineers",
+    primary: "김하린",
+    secondary: "RAG · 문서 자동화 AI 엔지니어",
+    owner: "운영팀",
+    submittedAt: "2026-08-11 10:20",
+    status: "new",
+    summary: "Python, FastAPI, LangChain 기반 RAG 구축 경험과 2주 이내 투입 가능 조건을 제출했습니다.",
+    details: [
+      { label: "이메일", value: "harin.kim@example.com" },
+      { label: "주요 기술", value: "Python, FastAPI, LangChain, React" },
+      { label: "경력", value: "5년" },
+      { label: "희망 보수", value: "400~500만원" },
+      { label: "가능 일정", value: "2주 후" },
+      { label: "검증 상태", value: "과제 배정 필요" },
+    ],
+    actions: ["검토 중으로 변경", "과제 배정", "반려"],
+  },
+  {
+    id: "company-001",
+    queue: "companies",
+    primary: "넥스트리테일",
+    secondary: "고객센터 RAG 챗봇 구축",
+    owner: "채용 담당자",
+    submittedAt: "2026-08-11 10:35",
+    status: "reviewing",
+    summary: "FAQ, 주문, 환불 문서를 기반으로 고객센터 응답 자동화가 가능한 AI 엔지니어 매칭을 요청했습니다.",
+    details: [
+      { label: "담당자 이메일", value: "recruiter@next-retail.example" },
+      { label: "프로젝트 유형", value: "RAG 검색 · AI 챗봇" },
+      { label: "예산", value: "1,000만-3,000만원" },
+      { label: "기간", value: "2-3개월" },
+      { label: "필요 인원", value: "1명" },
+      { label: "근무 방식", value: "원격" },
+    ],
+    actions: ["매칭 후보 찾기", "기업 정보 보완 요청", "보류"],
+  },
+  {
+    id: "matching-001",
+    queue: "matching",
+    primary: "넥스트리테일 ↔ 김하린",
+    secondary: "인터뷰 일정 조율 중",
+    owner: "매칭 매니저",
+    submittedAt: "2026-08-11 11:10",
+    status: "waiting",
+    summary: "기업이 매칭 신청을 보냈고 엔지니어 수락 이후 인터뷰 후보 일정을 조율해야 합니다.",
+    details: [
+      { label: "기업", value: "넥스트리테일" },
+      { label: "엔지니어", value: "김하린" },
+      { label: "현재 단계", value: "일정 조율 중" },
+      { label: "인터뷰 후보", value: "2026-08-12 10:00, 2026-08-12 14:00" },
+      { label: "다음 처리", value: "양쪽 일정 확정" },
+      { label: "불발 시", value: "새 후보 추천" },
+    ],
+    actions: ["인터뷰 확정", "쪽지 보내기", "매칭 불발"],
+  },
+  {
+    id: "warranty-001",
+    queue: "warranties",
+    primary: "알파제조",
+    secondary: "대체 인력 보증 요청",
+    owner: "보증 담당자",
+    submittedAt: "2026-08-11 11:40",
+    status: "blocked",
+    summary: "기존 매칭 인력의 투입 일정 지연으로 대체 후보 확인과 보증 적용 가능 여부 검토가 필요합니다.",
+    details: [
+      { label: "회사명", value: "알파제조" },
+      { label: "매칭 인재", value: "박도윤" },
+      { label: "요청 사유", value: "투입 일정 지연" },
+      { label: "잔여 보증", value: "2회" },
+      { label: "희망 처리", value: "48시간 내 대체 후보 안내" },
+      { label: "필요 확인", value: "계약 보증 조건 확인" },
+    ],
+    actions: ["처리 중으로 변경", "대체 후보 배정", "처리 완료"],
+  },
+];
+
 type StatusLevel = "good" | "info" | "warning" | "neutral";
 
 const warrantyPeriod = { startedAt: "2026-06-28", endsAt: "2027-06-28" };
@@ -529,6 +639,11 @@ function GoogleLoginPanel({ onBack }: { onBack: () => void }) {
       }
 
       const role = userSnapshot.data().role as UserRole | undefined;
+
+      if (role === "admin") {
+        window.location.hash = "#applications";
+        return;
+      }
 
       if (role === "recruiter") {
         window.location.hash = "#recruiter-project-input";
@@ -1550,141 +1665,69 @@ function DashboardHeader({ active, extra }: { active: "applications" | "company"
 }
 
 function ApplicationStatusPage() {
-  const [theme, setTheme] = useState<Theme>("light");
-  const [locale, setLocale] = useState<Locale>("ko");
-  const t = applicationsText[locale];
+  const [activeQueue, setActiveQueue] = useState<AdminQueueKey>("engineers");
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection } | null>(null);
-  const [selectedCandidate, setSelectedCandidate] = useState<(typeof candidates)[number] | null>(null);
-  const nameButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const [hoveredPortfolio, setHoveredPortfolio] = useState<{
-    candidate: (typeof candidates)[number];
-    rect: DOMRect;
-  } | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState(adminQueueItems[0].id);
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, AdminStatus>>({});
+  const [lastAction, setLastAction] = useState("");
 
-  const closeCandidateModal = () => {
-    const idToRefocus = selectedCandidate?.id;
-    setSelectedCandidate(null);
-    if (idToRefocus) {
-      nameButtonRefs.current[idToRefocus]?.focus();
-    }
-  };
-
-  const showPortfolioHologram = (
-    candidate: (typeof candidates)[number],
-    event: { currentTarget: HTMLElement }
-  ) => {
-    setHoveredPortfolio({ candidate, rect: event.currentTarget.getBoundingClientRect() });
-  };
-
-  const hidePortfolioHologram = () => setHoveredPortfolio(null);
+  const operationalItems = useMemo(
+    () => adminQueueItems.map((item) => ({ ...item, status: statusOverrides[item.id] ?? item.status })),
+    [statusOverrides]
+  );
 
   const stats = useMemo(() => {
-    const finalPassed = candidates.filter((candidate) => candidate.stage === "finalPassed").length;
-    const inProgress = candidates.filter(
-      (candidate) => candidate.stage === "documentPassed" || candidate.stage === "interviewing"
-    ).length;
-    const satisfied = candidates.filter((candidate) => candidate.decision === "만족").length;
-    return { total: candidates.length, finalPassed, inProgress, satisfied };
-  }, []);
+    const open = operationalItems.filter((item) => item.status !== "done").length;
+    const urgent = operationalItems.filter((item) => item.status === "blocked").length;
+    const completed = operationalItems.filter((item) => item.status === "done").length;
+    return { total: operationalItems.length, open, urgent, completed };
+  }, [operationalItems]);
 
-  const statusTabs: { key: StatusFilter; label: string; count: number }[] = [
-    { key: "all", label: t.allTab, count: candidates.length },
-    ...pipelineStageOrder.map((stage) => ({
-      key: stage,
-      label: pipelineStageLabelByLocale[locale][stage],
-      count: candidates.filter((candidate) => candidate.stage === stage).length,
-    })),
-  ];
-
-  const toggleSort = (key: SortKey) => {
-    setSort((current) => {
-      if (!current || current.key !== key) return { key, direction: "asc" };
-      if (current.direction === "asc") return { key, direction: "desc" };
-      return null;
-    });
-  };
-
-  const sortArrow = (key: SortKey) => {
-    if (!sort || sort.key !== key) return "";
-    return sort.direction === "asc" ? " ▲" : " ▼";
-  };
-
-  const filteredCandidates = useMemo(() => {
+  const filteredItems = useMemo(() => {
     const keyword = query.trim().toLowerCase();
-    const matched = candidates.filter((candidate) => {
-      const matchesStatus = statusFilter === "all" || candidate.stage === statusFilter;
-      const matchesKeyword =
-        !keyword ||
-        [candidate.name, candidate.role, candidate.decision].some((value) =>
-          value.toLowerCase().includes(keyword)
-        );
-      return matchesStatus && matchesKeyword;
+    return operationalItems.filter((item) => {
+      if (item.queue !== activeQueue) return false;
+      if (!keyword) return true;
+
+      return [item.primary, item.secondary, item.owner, item.summary]
+        .some((value) => value.toLowerCase().includes(keyword));
     });
+  }, [activeQueue, operationalItems, query]);
 
-    if (!sort) return matched;
+  const selectedItem = filteredItems.find((item) => item.id === selectedItemId) ?? filteredItems[0];
 
-    const direction = sort.direction === "asc" ? 1 : -1;
-    return [...matched].sort((a, b) => {
-      if (sort.key === "stage") {
-        return (pipelineStageOrder.indexOf(a.stage) - pipelineStageOrder.indexOf(b.stage)) * direction;
-      }
-      return a[sort.key].localeCompare(b[sort.key]) * direction;
-    });
-  }, [query, statusFilter, sort]);
+  function handleQueueChange(queue: AdminQueueKey) {
+    setActiveQueue(queue);
+    setQuery("");
+    setLastAction("");
+    setSelectedItemId(adminQueueItems.find((item) => item.queue === queue)?.id ?? "");
+  }
 
-  useEffect(() => {
-    if (!selectedCandidate) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSelectedCandidate(null);
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [selectedCandidate]);
+  function handleAction(action: string) {
+    if (!selectedItem) return;
+    const nextStatus = getNextAdminStatus(action);
+    setStatusOverrides((current) => ({ ...current, [selectedItem.id]: nextStatus }));
+    setLastAction(`${selectedItem.primary}: ${adminStatusMeta[nextStatus].label} 상태로 변경되었습니다.`);
+  }
 
   return (
-    <main className="applications-page dashboard-shell" data-theme={theme} style={applicationStyles.page}>
-      <DashboardHeader
-        active="applications"
-        extra={
-          <>
-            <button
-              type="button"
-              className="locale-toggle"
-              style={chromeStyles.textToggleButton}
-              onClick={() => setLocale((current) => (current === "ko" ? "en" : "ko"))}
-              aria-label={locale === "ko" ? "Switch to English" : "한국어로 전환"}
-              title={locale === "ko" ? "Switch to English" : "한국어로 전환"}
-            >
-              {locale === "ko" ? "EN" : "KO"}
-            </button>
-            <button
-              type="button"
-              className="theme-toggle"
-              style={chromeStyles.iconToggleButton}
-              onClick={() => setTheme((current) => (current === "light" ? "dark" : "light"))}
-              aria-label={theme === "light" ? "다크모드로 전환" : "라이트모드로 전환"}
-              title={theme === "light" ? "다크모드로 전환" : "라이트모드로 전환"}
-            >
-              {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
-            </button>
-          </>
-        }
-      />
+    <main className="applications-page dashboard-shell" data-theme="light" style={applicationStyles.page}>
+      <DashboardHeader active="applications" />
 
       <section style={applicationStyles.content}>
         <div className="applications-title-row" style={applicationStyles.titleRow}>
-          <p style={applicationStyles.eyebrow}>{t.eyebrow}</p>
-          <h1 style={applicationStyles.heading}>{t.heading}</h1>
-          <p style={applicationStyles.lead}>{t.lead}</p>
+          <p style={applicationStyles.eyebrow}>ADMIN OPERATIONS</p>
+          <h1 style={applicationStyles.heading}>관리자 운영 현황</h1>
+          <p style={applicationStyles.lead}>
+            엔지니어 제출, 기업 요청, 매칭 진행, 보증 요청을 한 화면에서 확인하고 처리합니다.
+          </p>
 
           <label className="applications-search" style={applicationStyles.searchBox}>
             <Search size={16} />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={t.searchPlaceholder}
+              placeholder="이름, 회사, 요청 내용 검색"
               style={applicationStyles.searchInput}
             />
           </label>
@@ -1692,126 +1735,163 @@ function ApplicationStatusPage() {
 
         <section style={applicationStyles.overviewCard} aria-label="종합 현황">
           <div className="overview-hero" style={applicationStyles.overviewHero}>
-            <span style={applicationStyles.overviewHeroLabel}>{t.totalApplicants}</span>
+            <span style={applicationStyles.overviewHeroLabel}>운영 처리 항목</span>
             <span style={applicationStyles.overviewHeroValue}>
               {stats.total}
-              <span style={applicationStyles.overviewHeroUnit}>{t.unit}</span>
+              <span style={applicationStyles.overviewHeroUnit}>건</span>
             </span>
-            <span style={applicationStyles.overviewHeroCaption}>{t.finalPassedShort} {stats.finalPassed} · {t.inProgressShort} {stats.inProgress}</span>
+            <span style={applicationStyles.overviewHeroCaption}>진행 {stats.open} · 확인 필요 {stats.urgent}</span>
           </div>
           <div style={applicationStyles.overviewMeters}>
-            <Meter label={t.finalPassRateLabel} value={stats.finalPassed} total={stats.total} unit={t.unit} />
-            <Meter label={t.decisionSatisfactionLabel} value={stats.satisfied} total={stats.total} unit={t.unit} />
+            <Meter label="진행 중 항목" value={stats.open} total={stats.total} unit="건" />
+            <Meter label="처리 완료 항목" value={stats.completed} total={stats.total} unit="건" />
           </div>
         </section>
 
         <section style={applicationStyles.tablePanel} aria-labelledby="applications-title">
           <div style={applicationStyles.panelHeaderRow}>
-            <h2 id="applications-title" style={applicationStyles.sectionTitle}>{t.applicantListTitle}</h2>
+            <h2 id="applications-title" style={applicationStyles.sectionTitle}>운영 큐</h2>
             <div style={applicationStyles.statusTabs} role="tablist" aria-label="채용 상태 필터">
-              {statusTabs.map((tab) => (
+              {adminQueueTabs.map((tab) => (
                 <button
                   key={tab.key}
                   type="button"
                   role="tab"
-                  aria-selected={statusFilter === tab.key}
+                  aria-selected={activeQueue === tab.key}
                   className="status-tab"
                   style={{
                     ...applicationStyles.statusTab,
-                    ...(statusFilter === tab.key ? applicationStyles.statusTabActive : {}),
+                    ...(activeQueue === tab.key ? applicationStyles.statusTabActive : {}),
                   }}
-                  onClick={() => setStatusFilter(tab.key)}
+                  onClick={() => handleQueueChange(tab.key)}
                 >
-                  {tab.label} {tab.count}
+                  {tab.label} {operationalItems.filter((item) => item.queue === tab.key).length}
                 </button>
               ))}
             </div>
           </div>
 
-          <div style={applicationStyles.tableWrap}>
-            <table style={applicationStyles.table}>
-              <thead>
-                <tr>
-                  <th style={applicationStyles.th}>
-                    <button type="button" style={applicationStyles.sortButton} onClick={() => toggleSort("name")}>
-                      {t.colName}{sortArrow("name")}
-                    </button>
-                  </th>
-                  <th style={applicationStyles.th}>
-                    <button type="button" style={applicationStyles.sortButton} onClick={() => toggleSort("decision")}>
-                      {t.colDecision}{sortArrow("decision")}
-                    </button>
-                  </th>
-                  <th style={applicationStyles.th}>
-                    <button type="button" style={applicationStyles.sortButton} onClick={() => toggleSort("decidedAt")}>
-                      {t.colDecidedAt}{sortArrow("decidedAt")}
-                    </button>
-                  </th>
-                  <th style={applicationStyles.th}>
-                    <button type="button" style={applicationStyles.sortButton} onClick={() => toggleSort("stage")}>
-                      {t.colStage}{sortArrow("stage")}
-                    </button>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredCandidates.length === 0 ? (
+          <div style={{ margin: "-8px 0 18px", color: "var(--text-secondary)", fontSize: "14px", lineHeight: 1.6 }}>
+            {adminQueueTabs.find((tab) => tab.key === activeQueue)?.description}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.1fr) minmax(320px, 0.9fr)", gap: "18px" }}>
+            <div style={applicationStyles.tableWrap}>
+              <table style={applicationStyles.table}>
+                <thead>
                   <tr>
-                    <td style={applicationStyles.emptyCell} colSpan={4}>
-                      {t.emptyState}
-                    </td>
+                    <th style={applicationStyles.th}>항목</th>
+                    <th style={applicationStyles.th}>담당</th>
+                    <th style={applicationStyles.th}>접수일</th>
+                    <th style={applicationStyles.th}>상태</th>
                   </tr>
-                ) : (
-                  filteredCandidates.map((candidate) => (
-                    <tr key={candidate.id}>
-                      <td style={applicationStyles.td}>
-                        <div style={applicationStyles.nameCell}>
-                          <span style={applicationStyles.avatar} aria-hidden="true">
-                            {candidate.name.slice(0, 1)}
-                          </span>
-                          <div>
-                            <button
-                              ref={(element) => {
-                                nameButtonRefs.current[candidate.id] = element;
-                              }}
-                              type="button"
-                              className="name-link"
-                              style={applicationStyles.nameLink}
-                              onClick={() => setSelectedCandidate(candidate)}
-                              onMouseEnter={(event) => showPortfolioHologram(candidate, event)}
-                              onMouseLeave={hidePortfolioHologram}
-                              onFocus={(event) => showPortfolioHologram(candidate, event)}
-                              onBlur={hidePortfolioHologram}
-                            >
-                              {candidate.name}
-                            </button>
-                            <span style={applicationStyles.roleText}>{candidate.role}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td style={applicationStyles.td}>{decisionLabelByLocale[locale][candidate.decision]}</td>
-                      <td style={applicationStyles.td}>{candidate.decidedAt}</td>
-                      <td style={applicationStyles.td}>
-                        <StageBadge stage={candidate.stage} locale={locale} />
+                </thead>
+                <tbody>
+                  {filteredItems.length === 0 ? (
+                    <tr>
+                      <td style={applicationStyles.emptyCell} colSpan={4}>
+                        검색 조건에 맞는 운영 항목이 없습니다.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    filteredItems.map((item) => (
+                      <tr key={item.id}>
+                        <td style={applicationStyles.td}>
+                          <div style={applicationStyles.nameCell}>
+                            <span style={applicationStyles.avatar} aria-hidden="true">
+                              {item.primary.slice(0, 1)}
+                            </span>
+                            <div>
+                              <button
+                                type="button"
+                                className="name-link"
+                                style={applicationStyles.nameLink}
+                                onClick={() => {
+                                  setSelectedItemId(item.id);
+                                  setLastAction("");
+                                }}
+                              >
+                                {item.primary}
+                              </button>
+                              <span style={applicationStyles.roleText}>{item.secondary}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={applicationStyles.td}>{item.owner}</td>
+                        <td style={applicationStyles.td}>{item.submittedAt}</td>
+                        <td style={applicationStyles.td}>
+                          <AdminStatusBadge status={item.status} />
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <aside style={{ border: "1px solid var(--card-border)", borderRadius: "16px", padding: "20px", background: "var(--table-header-bg)" }}>
+              {selectedItem ? (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
+                    <div>
+                      <p style={{ ...applicationStyles.eyebrow, marginBottom: "6px" }}>DETAIL</p>
+                      <h3 style={{ ...applicationStyles.sectionTitle, fontSize: "22px" }}>{selectedItem.primary}</h3>
+                      <p style={{ margin: "8px 0 0", color: "var(--text-secondary)", fontSize: "14px", lineHeight: 1.6 }}>
+                        {selectedItem.summary}
+                      </p>
+                    </div>
+                    <AdminStatusBadge status={selectedItem.status} />
+                  </div>
+
+                  <dl style={{ display: "grid", gap: "10px", margin: "18px 0 0" }}>
+                    {selectedItem.details.map((detail) => (
+                      <div key={detail.label} style={{ display: "grid", gap: "4px", borderBottom: "1px solid var(--card-border)", paddingBottom: "10px" }}>
+                        <dt style={{ color: "var(--text-muted)", fontSize: "12px", fontWeight: 800 }}>{detail.label}</dt>
+                        <dd style={{ margin: 0, color: "var(--text-primary)", fontSize: "14px", fontWeight: 700, lineHeight: 1.5 }}>{detail.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+
+                  <div style={{ display: "grid", gap: "8px", marginTop: "18px" }}>
+                    {selectedItem.actions.map((action) => (
+                      <button
+                        key={action}
+                        type="button"
+                        style={{ height: "40px", border: "1px solid var(--search-border)", borderRadius: "10px", background: "#fff", color: "var(--accent-text)", fontFamily: "inherit", fontWeight: 800, cursor: "pointer" }}
+                        onClick={() => handleAction(action)}
+                      >
+                        {action}
+                      </button>
+                    ))}
+                  </div>
+
+                  {lastAction ? (
+                    <p style={{ margin: "14px 0 0", borderRadius: "12px", background: "var(--accent-soft-bg)", padding: "12px", color: "var(--accent-text)", fontSize: "13px", fontWeight: 800 }}>
+                      {lastAction}
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <p style={{ margin: 0, color: "var(--text-muted)", fontSize: "14px" }}>선택된 항목이 없습니다.</p>
+              )}
+            </aside>
           </div>
         </section>
       </section>
-
-      {selectedCandidate && (
-        <CandidateModal candidate={selectedCandidate} onClose={closeCandidateModal} locale={locale} />
-      )}
-
-      {hoveredPortfolio && (
-        <PortfolioHologramCard candidate={hoveredPortfolio.candidate} rect={hoveredPortfolio.rect} locale={locale} />
-      )}
     </main>
   );
+}
+
+function AdminStatusBadge({ status }: { status: AdminStatus }) {
+  const meta = adminStatusMeta[status];
+  return <span style={applicationStyles[meta.styleKey]}>{meta.label}</span>;
+}
+
+function getNextAdminStatus(action: string): AdminStatus {
+  if (action.includes("완료") || action.includes("확정")) return "done";
+  if (action.includes("반려") || action.includes("보류") || action.includes("불발")) return "blocked";
+  if (action.includes("쪽지") || action.includes("보완")) return "waiting";
+  return "reviewing";
 }
 
 const demoDashboardBars = [
