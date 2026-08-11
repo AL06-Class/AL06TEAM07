@@ -21,7 +21,7 @@ import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useStat
 import { Badge } from "./components/ui/badge";
 import { Card, CardContent } from "./components/ui/card";
 import { FreelancerRegisterPage } from "./pages/FreelancerRegisterPage";
-import type { Company, Warranty, WarrantyIssue } from "./services/companySupport";
+import { getCompanies, getCompanySupport, type Company, type CompanySupportGuide, type SupportGuideCardType, type Warranty, type WarrantyIssue } from "./services/companySupport";
 
 type SignupRole = "company" | "engineer";
 type View = "select" | SignupRole;
@@ -332,38 +332,12 @@ const warrantyItems = [
   },
 ];
 
-const escalationSteps = [
-  { title: "대시보드 확인", description: "보증 현황 표에서 이슈 항목과 잔여 보증 횟수를 확인합니다." },
-  { title: "보증 실행 요청 (PM)", description: "담당 PM에게 보증 실행을 요청하고 이슈 내용을 전달합니다." },
-  { title: "대체 개발자 투입", description: "예비 인력 Pool에서 후보자를 매칭해 인수인계를 진행합니다." },
-];
-
-const referenceCards = [
-  {
-    icon: Phone,
-    title: "긴급 호출",
-    subtitle: "Hotline · 긴급 상황 시",
-    items: ["PM 연락처: 010-XXXX-XXXX", "보증팀 직통: support@team7.dev", "24시간 내 응답 보장"],
-  },
-  {
-    icon: RefreshCw,
-    title: "교체 프로세스",
-    subtitle: "Action · 인력 교체 3단계",
-    items: ["1. 이슈 파악 및 보고", "2. 후보자 매칭 (24시간)", "3. 헤드헌팅 및 인수인계 (7일)"],
-  },
-  {
-    icon: FileText,
-    title: "관련 문서",
-    subtitle: "Link · 참고 문서",
-    items: ["7일 정규 프로젝트 PRD", "개발자 온보딩 가이드", "프로젝트 기술 아키텍처"],
-  },
-  {
-    icon: ClipboardCheck,
-    title: "체크리스트",
-    subtitle: "Quality · 교체 시 필수 확인",
-    items: ["코드 컨벤션 준수 여부", "형상 관리(Git) 접근 권한", "업무 히스토리 전달 완료"],
-  },
-];
+const supportCardMetadata: Record<SupportGuideCardType, { icon: typeof Phone; title: string }> = {
+  hotline: { icon: Phone, title: "긴급 호출" },
+  replacement: { icon: RefreshCw, title: "교체 프로세스" },
+  documents: { icon: FileText, title: "관련 문서" },
+  checklist: { icon: ClipboardCheck, title: "체크리스트" },
+};
 
 const issueHistory = [
   {
@@ -1591,29 +1565,49 @@ function StatusDot({ level, label }: { level: StatusLevel; label: string }) {
   );
 }
 
-const sampleCompany: Company = { id: "sample-company", name: "샘플기업" };
-const sampleWarranty: Warranty = {
-  id: "sample-warranty",
-  companyId: sampleCompany.id,
-  totalCount: 3,
-  usedCount: 1,
-  startedAt: "2026-07-01",
-  endsAt: "2027-07-01",
-};
-const sampleIssues: WarrantyIssue[] = [
-  { id: "sample-issue-01", companyId: sampleCompany.id, title: "초기 개발 환경 설정 확인", ownerName: "김민지", status: "completed", actionTaken: "개발 환경 점검 및 설정 가이드 전달 완료", reportedAt: "2026-07-03" },
-  { id: "sample-issue-02", companyId: sampleCompany.id, title: "배포 후 알림 기능 오류", ownerName: "이도윤", status: "inProgress", actionTaken: "원인 분석 및 수정 배포 진행 중", reportedAt: "2026-08-05" },
-];
-
 function CompanySupportStatusPage() {
-  const [companyId, setCompanyId] = useState(sampleCompany.id);
-  // TODO: 백엔드가 companyId를 전달하면 이 선택창을 제거하고 Firestore 조회를 연결한다.
-  const companies = [sampleCompany];
-  const warranty = companyId === sampleCompany.id ? sampleWarranty : null;
-  const issues = companyId === sampleCompany.id ? sampleIssues : [];
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companyId, setCompanyId] = useState("");
+  const [warranty, setWarranty] = useState<Warranty | null>(null);
+  const [issues, setIssues] = useState<WarrantyIssue[]>([]);
+  const [guide, setGuide] = useState<CompanySupportGuide | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    getCompanies()
+      .then((loadedCompanies) => {
+        setCompanies(loadedCompanies);
+        setCompanyId(loadedCompanies[0]?.id ?? "");
+      })
+      .catch(() => setLoadError("기업 목록을 불러오지 못했습니다. Firestore 설정을 확인해주세요."))
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!companyId) {
+      setWarranty(null);
+      setIssues([]);
+      setGuide(null);
+      return;
+    }
+    setIsLoading(true);
+    setLoadError("");
+    getCompanySupport(companyId)
+      .then((support) => {
+        setWarranty(support.warranty);
+        setIssues(support.issues);
+        setGuide(support.guide);
+      })
+      .catch(() => setLoadError("보증 정보를 불러오지 못했습니다. Firestore 설정을 확인해주세요."))
+      .finally(() => setIsLoading(false));
+  }, [companyId]);
 
   const remainingWarranty = Math.max(0, (warranty?.totalCount ?? 0) - (warranty?.usedCount ?? 0));
   const hasAttentionItem = issues.some((issue) => issue.status !== "completed");
+  const currentCompany = companies.find((company) => company.id === companyId);
+  const escalationSteps = guide?.escalationSteps ?? [];
+  const referenceCards = guide?.referenceCards ?? [];
 
   const warrantyProgress = useMemo(() => {
     const start = new Date(warranty?.startedAt ?? "").getTime();
@@ -1641,10 +1635,14 @@ function CompanySupportStatusPage() {
           <label style={companyStyles.companySelectLabel}>
             조회할 기업
             <select value={companyId} onChange={(event) => setCompanyId(event.target.value)} style={companyStyles.companySelect}>
+              <option value="">기업을 선택하세요</option>
               {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
             </select>
           </label>
         </div>
+
+        {loadError && <p style={companyStyles.errorMessage}>{loadError}</p>}
+        {!isLoading && !loadError && !currentCompany && <p style={companyStyles.emptyMessage}>등록된 기업 정보가 없습니다.</p>}
 
         <section
           style={{
@@ -1742,14 +1740,14 @@ function CompanySupportStatusPage() {
 
           <section style={companyStyles.referenceGrid} aria-label="참고 자료">
             {referenceCards.map((card) => {
-              const Icon = card.icon;
+              const { icon: Icon, title } = supportCardMetadata[card.guideType];
               return (
-                <div key={card.title} style={companyStyles.referenceCard}>
+                <div key={card.guideType} style={companyStyles.referenceCard}>
                   <div style={companyStyles.referenceIconBox}>
                     <Icon size={18} />
                   </div>
-                  <div>
-                    <strong style={companyStyles.referenceTitle}>{card.title}</strong>
+                  <div style={companyStyles.referenceCardContent}>
+                    <strong style={companyStyles.referenceTitle}>{title}</strong>
                     <span style={companyStyles.referenceSubtitle}>{card.subtitle}</span>
                     <ul style={companyStyles.referenceList}>
                       {card.items.map((line) => (
@@ -1853,11 +1851,12 @@ const companyStyles: Record<string, CSSProperties> = {
   escalationNumber: { flex: "0 0 auto", display: "grid", placeItems: "center", width: "26px", height: "26px", borderRadius: "999px", background: "#991b1b", color: "#fff", fontSize: "12px", fontWeight: 800 },
   escalationStepTitle: { display: "block", color: "#210b0b", fontSize: "13px", fontWeight: 800 },
   escalationStepDesc: { margin: "3px 0 0", color: "#6b5a5a", fontSize: "12px", lineHeight: 1.5 },
-  referenceGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "14px" },
-  referenceCard: { display: "flex", gap: "12px", border: "1px solid #f2e2e2", borderRadius: "16px", background: "#fff", padding: "16px" },
+  referenceGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px", alignItems: "stretch" },
+  referenceCard: { display: "grid", gridTemplateColumns: "36px minmax(0, 1fr)", alignItems: "start", gap: "12px", minWidth: 0, border: "1px solid #f2e2e2", borderRadius: "16px", background: "#fff", padding: "18px", boxShadow: "0 6px 16px rgba(33, 11, 11, 0.03)" },
   referenceIconBox: { flex: "0 0 auto", display: "grid", placeItems: "center", width: "34px", height: "34px", borderRadius: "10px", background: "#fdeaea", color: "#991b1b" },
-  referenceTitle: { display: "block", color: "#210b0b", fontSize: "13px", fontWeight: 800 },
-  referenceSubtitle: { display: "block", marginTop: "2px", color: "#8a7373", fontSize: "11px" },
-  referenceList: { margin: "8px 0 0", padding: "0 0 0 14px", color: "#4a3d3d", fontSize: "12px", lineHeight: 1.6 },
-  referenceItem: { marginBottom: "2px" },
+  referenceCardContent: { minWidth: 0 },
+  referenceTitle: { display: "block", color: "#210b0b", fontSize: "14px", fontWeight: 800, lineHeight: 1.4 },
+  referenceSubtitle: { display: "block", marginTop: "3px", color: "#8a7373", fontSize: "12px", lineHeight: 1.45, overflowWrap: "anywhere" },
+  referenceList: { display: "grid", gap: "6px", margin: "12px 0 0", padding: 0, listStyle: "none", color: "#4a3d3d", fontSize: "12px", lineHeight: 1.55 },
+  referenceItem: { minWidth: 0, overflowWrap: "anywhere", wordBreak: "break-word" },
 };
