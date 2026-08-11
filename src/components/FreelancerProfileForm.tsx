@@ -227,13 +227,35 @@ export const freelancerProfileInitialData = {
 
 type FreelancerProfileFormData = typeof freelancerProfileInitialData;
 
-export function FreelancerProfileForm() {
+function getFieldDisplayValue(field: FieldConfig, value: string | string[] | boolean) {
+  if (typeof value === "boolean") return value ? "가능" : "불가능";
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "미입력";
+    return value
+      .map((item) => field.options?.find((option) => option.value === item)?.label ?? item)
+      .join(", ");
+  }
+
+  if (!value) return "미입력";
+  return field.options?.find((option) => option.value === value)?.label ?? value;
+}
+
+type FreelancerProfileFormProps = {
+  onReviewModeChange?: (isReviewMode: boolean) => void;
+};
+
+export function FreelancerProfileForm({ onReviewModeChange }: FreelancerProfileFormProps) {
   const [formData, setFormData] = useState<FreelancerProfileFormData>(
     freelancerProfileInitialData
   );
   const [notice, setNotice] = useState("");
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [showReview, setShowReview] = useState(false);
 
   function handleFieldChange(name: string, value: string | string[] | boolean) {
+    setShowReview(false);
+    onReviewModeChange?.(false);
     setFormData((current) => ({
       ...current,
       [name]: value
@@ -242,21 +264,99 @@ export function FreelancerProfileForm() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setNotice("등록 완료 화면으로 이동하는 UI 시안입니다. 실제 제출은 연결하지 않았습니다.");
+    setIsSubmitted(true);
+    setShowReview(false);
+    onReviewModeChange?.(false);
+    setNotice("제출이 완료되었습니다. 담당자가 입력 정보를 확인한 뒤 매칭 절차를 안내합니다.");
   }
 
   function handleDraftClick() {
-    setNotice("임시 저장 기능은 아직 연결하지 않았습니다.");
+    setIsSubmitted(false);
+    setShowReview(false);
+    onReviewModeChange?.(false);
+    setNotice("작성 중인 등록 정보가 임시 저장되었습니다.");
+  }
+
+  function handleReviewClick() {
+    setShowReview(true);
+    onReviewModeChange?.(true);
+    window.setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 0);
+  }
+
+  function handleBackToFormClick() {
+    setShowReview(false);
+    onReviewModeChange?.(false);
+  }
+
+  if (showReview) {
+    return (
+      <section
+        id="freelancer-review"
+        className="rounded-lg border border-[#d7e2ec] bg-white p-5 shadow-sm"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-[#e3edf5] pb-4 max-sm:block">
+          <div>
+            <p className="text-sm font-extrabold text-[#0f6ea8]">내 등록 정보</p>
+            <h3 className="mt-1 text-xl font-extrabold text-[#172033]">
+              제출한 AI 엔지니어 등록 정보
+            </h3>
+            <p className="mt-2 text-sm font-semibold leading-6 text-[#667085]">
+              제출 완료 후 입력한 내용을 확인하는 화면입니다.
+            </p>
+          </div>
+          <span className="inline-flex rounded-full bg-[#f1f9fe] px-3 py-1 text-xs font-extrabold text-[#0f5f99] max-sm:mt-3">
+            제출 완료
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-4">
+          {formSections.map((section) => (
+            <section key={section.id} className="rounded-md bg-[#fbfdff] p-4">
+              <h4 className="text-base font-extrabold text-[#172033]">
+                {section.title}
+              </h4>
+              <dl className="mt-3 grid grid-cols-2 gap-3 max-md:grid-cols-1">
+                {section.fields.map((field) => (
+                  <div key={field.name} className="rounded-md border border-[#e3edf5] bg-white p-3">
+                    <dt className="text-xs font-bold text-[#667085]">
+                      {field.label}
+                    </dt>
+                    <dd className="mt-1 break-words text-sm font-extrabold text-[#172033]">
+                      {getFieldDisplayValue(
+                        field,
+                        formData[field.name as keyof FreelancerProfileFormData]
+                      )}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          ))}
+        </div>
+
+        <div className="mt-5 flex justify-end gap-3 max-sm:grid max-sm:grid-cols-1">
+          <button
+            type="button"
+            onClick={handleBackToFormClick}
+            className="h-10 rounded-md border border-[#d7e2ec] bg-white px-5 text-sm font-extrabold text-[#263445] hover:bg-[#f8fbfd]"
+          >
+            입력 화면으로 돌아가기
+          </button>
+          <a
+            href="#signup"
+            className="inline-flex h-10 items-center justify-center rounded-md bg-[#0f6ea8] px-5 text-sm font-extrabold text-white no-underline hover:bg-[#0d5f91]"
+          >
+            홈으로 이동
+          </a>
+        </div>
+      </section>
+    );
   }
 
   return (
     <form className="grid gap-4" onSubmit={handleSubmit}>
-      {notice ? (
-        <div className="rounded-lg border border-[#b8def3] bg-[#f1f9fe] px-4 py-3 text-sm font-bold text-[#0f5f99]">
-          {notice}
-        </div>
-      ) : null}
-
       {formSections.map((section, index) => (
         <Card
           key={section.title}
@@ -296,10 +396,43 @@ export function FreelancerProfileForm() {
         </Card>
       ))}
 
+      {isSubmitted ? (
+        <div className="rounded-lg border border-[#b8def3] bg-[#f1f9fe] p-5 shadow-sm">
+          <p className="text-base font-extrabold text-[#0f5f99]">
+            제출이 완료되었습니다.
+          </p>
+          <p className="mt-2 text-sm font-semibold leading-6 text-[#34566b]">
+            담당자가 입력 정보를 확인한 뒤 매칭 절차를 안내합니다.
+          </p>
+          <div className="mt-4 flex gap-3 max-sm:grid max-sm:grid-cols-1">
+            <button
+              type="button"
+              onClick={handleReviewClick}
+              className="h-10 rounded-md border border-[#b8def3] bg-white px-5 text-sm font-extrabold text-[#0f5f99] hover:bg-[#fbfdff]"
+            >
+              내 등록 정보 확인
+            </button>
+            <a
+              href="#signup"
+              className="inline-flex h-10 items-center justify-center rounded-md bg-[#0f6ea8] px-5 text-sm font-extrabold text-white no-underline hover:bg-[#0d5f91]"
+            >
+              홈으로 이동
+            </a>
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex items-center justify-between gap-4 rounded-lg border border-[#e3edf5] bg-white p-4 shadow-sm max-md:flex-col max-md:items-stretch">
-        <p className="text-sm font-semibold text-[#667085]">
-          현재 단계는 UI 시안이며 저장 기능은 연결하지 않았습니다.
-        </p>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[#667085]">
+            입력한 정보는 기업 매칭과 검증 과제 배정에 활용됩니다.
+          </p>
+          {notice && !isSubmitted ? (
+            <p className="mb-0 mt-2 text-sm font-bold text-[#0f5f99]">
+              {notice}
+            </p>
+          ) : null}
+        </div>
         <div className="flex gap-3 max-md:grid max-md:grid-cols-2">
           <button
             type="button"
@@ -310,9 +443,14 @@ export function FreelancerProfileForm() {
           </button>
           <button
             type="submit"
-            className="h-10 rounded-md bg-[#0f6ea8] px-5 text-sm font-extrabold text-white hover:bg-[#0d5f91]"
+            disabled={isSubmitted}
+            className={`h-10 rounded-md px-5 text-sm font-extrabold text-white ${
+              isSubmitted
+                ? "cursor-not-allowed bg-[#88b9d5]"
+                : "bg-[#0f6ea8] hover:bg-[#0d5f91]"
+            }`}
           >
-            등록 완료 보기
+            {isSubmitted ? "제출 완료" : "제출"}
           </button>
         </div>
       </div>
